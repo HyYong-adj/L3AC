@@ -9,12 +9,14 @@ import utils
 
 @lru_cache
 def get_world_size():
-    return distributed.get_world_size()
+    if distributed.is_available() and distributed.is_initialized():
+        return distributed.get_world_size()
+    return 1
 
 
 @lru_cache
 def is_distributed():
-    return distributed.is_initialized() and get_world_size() > 1
+    return distributed.is_available() and distributed.is_initialized() and distributed.get_world_size() > 1
 
 
 @lru_cache
@@ -23,6 +25,8 @@ def is_main_process():
 
 
 def gather_tensors(local_tensor: torch.Tensor, tensor_size: list[int] = None) -> list[torch.Tensor]:
+    if not is_distributed():
+        return [local_tensor]
     if tensor_size is None:
         local_size = torch.tensor(local_tensor.shape, dtype=torch.int64, device=local_tensor.device)
         all_sizes = [torch.empty_like(local_size) for _ in range(get_world_size())]
@@ -110,14 +114,22 @@ def tensor_gather(func):
     return wrapper
 
 
-def tensor_reducer(reduction='sum'):
+def tensor_reducer(reduction: str = "sum"):
     from torch._C._distributed_c10d import ReduceOp
     reduce_op = getattr(ReduceOp, reduction.upper())
 
     def decorator(func):
         def wrapper(*args, **kwargs) -> torch.Tensor:
             result_tensor = func(*args, **kwargs).clone()
-            torch.distributed.all_reduce(result_tensor, reduce_op)
+
+            # ddp-> all_reduce
+            if (
+                torch.distributed.is_available()
+                and torch.distributed.is_initialized()
+                and torch.distributed.get_world_size() > 1
+            ):
+                torch.distributed.all_reduce(result_tensor, op=reduce_op)
+
             return result_tensor
 
         return wrapper

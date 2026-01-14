@@ -1,0 +1,85 @@
+# =========================
+# Data (DO NOT COMMIT)
+# =========================
+dataset/
+data/
+datasets/
+**/*.mp3
+**/*.wav
+**/*.flac
+**/*.ogg
+**/*.m4a
+**/*.h5
+**/*.hdf5
+**/*.tar
+**/*.tar.gz
+**/*.zip
+
+# If you have absolute-path symlinks or mounts recorded somewhere
+**/mtg-jamendo-dataset/
+**/jamendo*/
+
+# =========================
+# Training artifacts
+# =========================
+checkpoints/
+ckpt/
+runs/
+outputs/
+logs/
+wandb/
+lightning_logs/
+tensorboard/
+mlruns/
+
+# =========================
+# Caches / temp
+# =========================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.cache/
+pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# Env / secrets
+# =========================
+.env
+.env.*
+*.key
+*.pem
+*.pth
+*.pt
+*.bin
+
+# =========================
+# OS / editors
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Extra: run logs / tensorboard
+*.log
+**/*.log
+**/events.out.tfevents.*
+env.log
+runtime.env
+runtime_gpu.env
+*.log
+output/
+etc/plots/raw_data/
+
+# Local env / runtime logs (do not commit)
+env.log
+runtime.env
+runtime_gpu.env
+*.log
+output/
+wandb/
+etc/plots/raw_data/

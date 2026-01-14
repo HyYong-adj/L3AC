@@ -15,7 +15,15 @@ def get_gpu_nums() -> int:
 
 
 def set_available_gpus(device_indexes):
-    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(map(str, sorted(device_indexes)))
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+
+    # don't override existing setting
+    if visible not in ("", "-1"):
+        print(f"[acc_runtime] keep CUDA_VISIBLE_DEVICES={visible}")
+        return
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, sorted(device_indexes)))
+    print(f"[acc_runtime] set CUDA_VISIBLE_DEVICES={os.environ['CUDA_VISIBLE_DEVICES']}")
 
 
 def get_acc_precision(data_precision: torch.dtype) -> str:

@@ -85,7 +85,7 @@ class ChannelNorm(nn.Module):
     def __repr__(self):
         return f"{self.__class__.__name__}(n_channels={self.n_channels}, {self.data_format})"
 
-
+#현재 입력 x 에서 더 중요한 채널(l2 norm 기준)을 강조하는 역할
 class GRN(nn.Module):
     """ GRN (Global Response Normalization) layer
     Which supports two data formats: channels_last (default) or channels_first.
@@ -110,9 +110,179 @@ class GRN(nn.Module):
         self.eps = torch.tensor(eps)
 
     def forward(self, x):
-        g_x = torch.norm(x, p=2, dim=[1, 2], keepdim=True)
-        n_x = g_x / (g_x.mean(dim=self.channel_dim, keepdim=True) + self.eps)
+        g_x = torch.norm(x, p=2, dim=[1, 2], keepdim=True) #(b,1,1) #(b,1,1,c)
+        n_x = g_x / (g_x.mean(dim=self.channel_dim, keepdim=True) + self.eps) #(b,1,1) #(b,1,1,c)
         return self.gamma * (x * n_x) + self.beta + x
 
     def __repr__(self):
         return f"{self.__class__.__name__}(n_channels={self.n_channels}, {self.data_format})"
+
+class GRN_3d(nn.Module):
+    def __init__(self, n_channels, eps=1e-6, data_format="channels_last"):
+        super().__init__()
+        self.n_channels = n_channels
+        self.data_format = data_format
+        self.eps = eps
+        if data_format == "channels_last":
+            self.gamma = nn.Parameter(torch.zeros(1, 1, n_channels))
+            self.beta  = nn.Parameter(torch.zeros(1, 1, n_channels))
+        elif data_format == "channels_first":
+            self.gamma = nn.Parameter(torch.zeros(1, n_channels, 1))
+            self.beta  = nn.Parameter(torch.zeros(1, n_channels, 1))
+        else:
+            raise ValueError
+
+    def forward(self, x):
+        if self.data_format == "channels_last":   # x: (B,T,C)
+            gx = torch.norm(x, p=2, dim=1, keepdim=True)               # (B,1,C)
+            nx = gx / (gx.mean(dim=-1, keepdim=True) + self.eps)       # (B,1,C)
+        else:                                       # x: (B,C,T)
+            gx = torch.norm(x, p=2, dim=2, keepdim=True)               # (B,C,1)
+            nx = gx / (gx.mean(dim=1, keepdim=True) + self.eps)        # (B,C,1)
+        return self.gamma * (x * nx) + self.beta + x
+    
+class CausalGRNRMS(nn.Module):
+    def __init__(self, n_channels, eps=1e-6, data_format="channels_last"):
+        super().__init__()
+        self.n_channels = n_channels
+        self.data_format = data_format
+        self.eps = eps
+        if data_format == "channels_last":
+            self.gamma = nn.Parameter(torch.zeros(1, 1, n_channels))
+            self.beta  = nn.Parameter(torch.zeros(1, 1, n_channels))
+        else:
+            self.gamma = nn.Parameter(torch.zeros(1, n_channels, 1))
+            self.beta  = nn.Parameter(torch.zeros(1, n_channels, 1))
+
+    def forward(self, x):
+        if self.data_format == "channels_last":   # (B,T,C)
+            s = torch.cumsum(x * x, dim=1)                           # (B,T,C) prefix sum
+            t = torch.arange(1, x.size(1) + 1, device=x.device, dtype=x.dtype).view(1, -1, 1)    # (B,T,C)
+            g = torch.sqrt(s / t + self.eps)  # prefix RMS  (B,T,C)
+            n = g / (g.mean(dim=-1, keepdim=True) + self.eps)
+        else:                                     # (B,C,T)
+            s = torch.cumsum(x * x, dim=2)                           # (B,C,T)
+            t = torch.arange(1, x.size(2) + 1, device=x.device, dtype=x.dtype).view(1, 1, -1)    # (B,C,T)
+            g = torch.sqrt(s / t + self.eps)  # prefix RMS  (B,C,T)
+            n = g / (g.mean(dim=1, keepdim=True) + self.eps)          # (B,C,T)
+        return self.gamma * (x * n) + self.beta + x
+    
+
+class CausalGRNEMA(nn.Module):
+    """
+    Causal Global Response Normalization using EMA.
+    - Supports channels_last (B, T, C) and channels_first (B, C, T)
+    - Padding (zeros) is INCLUDED in EMA (no mask)
+    - Intended for causal CNN outputs
+    """
+
+    def __init__(
+        self,
+        n_channels,
+        alpha=0.99,
+        eps=1e-6,
+        ema_init=1e-4,
+        data_format="channels_last",
+        bias_correction=True,
+    ):
+        super().__init__()
+        self.n_channels = n_channels
+        self.alpha = float(alpha)
+        self.eps = eps
+        self.ema_init = ema_init
+        self.bias_correction = bias_correction
+        self.data_format = data_format
+
+        if data_format == "channels_last":
+            # (B,T,C)
+            self.gamma = nn.Parameter(torch.zeros(1, n_channels))
+            self.beta  = nn.Parameter(torch.zeros(1, n_channels))
+            self.channel_dim = -1
+        elif data_format == "channels_first":
+            # (B,C,T)
+            self.gamma = nn.Parameter(torch.zeros(n_channels, 1))
+            self.beta  = nn.Parameter(torch.zeros(n_channels, 1))
+            self.channel_dim = 1
+        else:
+            raise ValueError(f"Unsupported data_format: {data_format}")
+
+    def forward(self, x):
+        """
+        x:
+          - channels_last : (B,T,C)
+          - channels_first: (B,C,T)
+        """
+        if self.data_format == "channels_last":
+            B, T, C = x.shape
+            assert C == self.n_channels
+            # ema: (B,1,C)
+            ema = torch.full(
+                (B, 1, C),
+                self.ema_init,
+                device=x.device,
+                dtype=x.dtype,
+            )
+            k = torch.zeros(B, 1, 1, device=x.device, dtype=x.dtype)
+            outs = []
+            alpha_t = torch.tensor(self.alpha, device=x.device, dtype=x.dtype)
+
+            for t in range(T):
+                xt = x[:, t:t+1, :]            # (B,1,C)
+                ema = self.alpha * ema + (1 - self.alpha) * (xt * xt)
+
+                if self.bias_correction:
+                    k = k + 1
+                    denom = 1.0 - torch.pow(alpha_t, k)
+                    ema_hat = ema / (denom + self.eps)
+                else:
+                    ema_hat = ema
+
+                g = torch.sqrt(ema_hat + self.eps)                 # (B,1,C)
+                n = g / (g.mean(dim=-1, keepdim=True) + self.eps)  # (B,1,C)
+
+                yt = self.gamma * (xt * n) + self.beta + xt
+                outs.append(yt)
+
+            return torch.cat(outs, dim=1)  # (B,T,C)
+
+        else:
+            # channels_first: (B,C,T)
+            B, C, T = x.shape
+            assert C == self.n_channels
+            # ema: (B,C,1)
+            ema = torch.full(
+                (B, C, 1),
+                self.ema_init,
+                device=x.device,
+                dtype=x.dtype,
+            )
+            k = torch.zeros(B, 1, 1, device=x.device, dtype=x.dtype)
+            outs = []
+            alpha_t = torch.tensor(self.alpha, device=x.device, dtype=x.dtype)
+
+            for t in range(T):
+                xt = x[:, :, t:t+1]            # (B,C,1)
+                ema = self.alpha * ema + (1 - self.alpha) * (xt * xt)
+
+                if self.bias_correction:
+                    k = k + 1
+                    denom = 1.0 - torch.pow(alpha_t, k)
+                    ema_hat = ema / (denom + self.eps)
+                else:
+                    ema_hat = ema
+
+                g = torch.sqrt(ema_hat + self.eps)                 # (B,C,1)
+                n = g / (g.mean(dim=1, keepdim=True) + self.eps)   # (B,C,1)
+
+                yt = self.gamma * (xt * n) + self.beta + xt
+                outs.append(yt)
+
+            return torch.cat(outs, dim=2)  # (B,C,T)
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}"
+            f"(n_channels={self.n_channels}, "
+            f"alpha={self.alpha}, "
+            f"data_format={self.data_format})"
+        )

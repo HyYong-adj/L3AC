@@ -53,8 +53,18 @@ class Settings(BaseSettings):
     @field_validator('cuda_devices', mode='before')
     @classmethod
     def detect_cuda(cls, cuda_devices: list[int] | None, info: ValidationInfo) -> list[int]:
-        if cuda_devices is None:
-            cuda_devices = xtract.gpu.auto_choose_cuda(info.data['gpu_num'], waiting=info.data['waiting_cuda'])
+        gpu_num = info.data['gpu_num']
+        waiting = info.data.get('waiting_cuda', False)
+
+        visible = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+
+        if visible != "":
+            # CUDA_VISIBLE_DEVICES="1" or "0,2" 같은 형태
+            # 이 경우 "보이는 GPU"의 인덱스는 0..N-1로 재매핑됨
+            # 따라서 그냥 0..gpu_num-1을 쓰면 된다.
+            cuda_devices = list(range(gpu_num))
+        else:
+            cuda_devices = xtract.gpu.auto_choose_cuda(gpu_num, waiting=waiting)
         return cuda_devices
 
     @field_validator('data_precision', mode='before')

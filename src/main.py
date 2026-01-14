@@ -1,7 +1,7 @@
 def train():
     import model.exp.train
 
-    model.exp.train.train()
+    model.exp.train.train()   
 
 
 if __name__ == '__main__':

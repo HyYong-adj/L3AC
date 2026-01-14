@@ -12,6 +12,7 @@ class ModelConfig(base_codec.ModelConfig):
     en_coder_dynamic_pos: bool = False
     en_coder_compress_rate: int = 1
     en_coder_cache_size: int = 0
+    causal: bool = False
 
     @computed_field
     @cached_property
@@ -51,7 +52,7 @@ class EnCodec(base_codec.Codec):
         }
 
     def forward(self, audio_data: torch.Tensor):
-        audio_data, audio_length = self.preprocess(audio_data)
+        audio_data, audio_length, pad_len = self.preprocess(audio_data)
 
         feature = self.encoder(audio_data.unsqueeze(1))
         trans_feature = self.en_encoder(feature)
@@ -60,9 +61,9 @@ class EnCodec(base_codec.Codec):
 
         q_feature = self.en_decoder(q_trans_feature)
         y = self.decoder(q_feature).squeeze(1)
-
+        
         return {
-            # 'generated_audio': y[..., -audio_length:],  # ! left pad or right pad?
+            # 'generated_audio': y[..., -audio_length:],  # ! left pad or right pad? # 적절한 crop 필요!!!
             'generated_audio': y[..., :audio_length],
             'embedded_audio': q_feature,
             'indices': indices['indices'],

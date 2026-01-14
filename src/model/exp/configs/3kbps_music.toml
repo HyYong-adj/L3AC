@@ -1,5 +1,6 @@
 sample_rate = 16000
 
+
 train_epoch_num = 70
 target_batch_size = 24  # !
 train_dis_every_n_batches = 15  # edit
@@ -9,10 +10,7 @@ dis_grad_max_norm = 10
 
 [train_data]
 dataset_paths = [
-    #"libri_speech_FLAC/train",
-    #"common_voice_24k/train",
     "mtg/train",
-    #"FSD50K_44k/train",
 ]
 data_normalize = true
 max_seconds = 7.2  # edit
@@ -21,7 +19,6 @@ sample_num = 90_000
 
 [eval_data]
 dataset_paths = [
-    #'common_voice_24k/eval',
     'mtg/eval',
 ]
 data_normalize = true
@@ -31,8 +28,6 @@ sample_num = 320
 
 [test_data]
 dataset_paths = [
-    #'libri_speech_FLAC/test',
-    #'common_voice_24k/test',
     'mtg/test',
 ]
 data_normalize = false
@@ -58,7 +53,7 @@ en_coder_window_size = 400  # edit
 en_coder_dynamic_pos = true
 en_coder_compress_rate = 1  # edit
 en_coder_cache_size = 0
-causal = False
+causal = true
 
 [dis_nn_config]
 fft_size = [126, 542, 1418, 2296]
