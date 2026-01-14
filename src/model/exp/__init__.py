@@ -18,7 +18,7 @@ from model.optimizer import OptimizerConfig
 from model.metric import Metrics
 from model.network import NetworkConfig, Network
 from model.network.discriminator import Discriminator
-
+import wandb
 
 class Config(FileConfig):
     sample_rate: int = 16000
@@ -150,62 +150,141 @@ class Model:
         return current_lr
 
     def step_train_discriminator(self, accumulated_batch: list[dict], accumulate_num: int,
-                                 recorder: mlogging.MainProcessLogger):
-        # update discriminator
+                             recorder: mlogging.MainProcessLogger):
         step_flags = []
         self.network.eval()
         self.dis_nn.train()
         self.dis_optimizer.zero_grad(set_to_none=True)
+
+        do_wandb = (ACC.is_main_process and (wandb.run is not None))
+        if do_wandb and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+
         for cd, (batch_input, step_flag) in utils.iter.cd_enumerate(accumulated_batch):
             with self.grad_sync_context(cd == 0):
                 with torch.no_grad():
                     nn_output = self.network(batch_input['audio'])
-                weighted_sum, loss_dict = self.dis_nn(fake=nn_output['generated_audio'],
-                                                      real=batch_input['audio'],
-                                                      get_dis_loss=True)
+
+                weighted_sum, loss_dict = self.dis_nn(
+                    fake=nn_output['generated_audio'],
+                    real=batch_input['audio'],
+                    get_dis_loss=True
+                )
                 ACC.backward(weighted_sum / accumulate_num)
                 param_norm = ACC.clip_grad_norm_(self.dis_nn.parameters(), self.mc.dis_grad_max_norm)
+
                 if step_flag:
                     step_flags.append(step_flag)
+
                     recorder.variables(loss_dict, namespace='training/dis_', prog_bar=True)
                     recorder.variable("training/dis_loss_sum", weighted_sum, prog_bar=True)
-                    recorder.variable(f"training/dis_param_norm", param_norm, prog_bar=True)
+                    recorder.variable("training/dis_param_norm", param_norm, prog_bar=True)
+
+                    # ✅ dis 쪽 loss들도 W&B에 찍기 (commit=False)
+                    if do_wandb:
+                        step = int(self.scheduler.scheduler.last_epoch) + 1  # generator step 축에 맞춤
+
+                        log_dict = {f"train/dis_{k}": (v.item() if torch.is_tensor(v) else v)
+                                    for k, v in loss_dict.items()}
+                        log_dict["train/dis_loss_sum"] = (weighted_sum.item()
+                                                        if torch.is_tensor(weighted_sum) else float(weighted_sum))
+                        log_dict["train/dis_param_norm"] = (param_norm.item()
+                                                        if torch.is_tensor(param_norm) else float(param_norm))
+
+                        wandb.log(log_dict, step=step, commit=False)
+
         self.dis_optimizer.step()
 
         if len(step_flags) > 0:
             assert len(step_flags) == 1, "You should set smaller steps_per_epoch_num! "
-            learning_rate = self.step_scheduler(self.dis_scheduler)
-            recorder.variable(f"training/dis_lr", learning_rate, prog_bar=False)
+            dis_lr = self.step_scheduler(self.dis_scheduler)
+            recorder.variable("training/dis_lr", dis_lr, prog_bar=False)
 
+            if do_wandb:
+                step = int(self.scheduler.scheduler.last_epoch)  # generator 축 기준
+                log_dict = {"train/dis_lr": float(dis_lr)}
+
+                if torch.cuda.is_available():
+                    log_dict["gpu/dis_peak_mem_MB"] = torch.cuda.max_memory_allocated() / 1024**2
+
+                wandb.log(log_dict, step=step, commit=True)
+                
     def step_train_generator(self, accumulated_batch: list[dict], accumulate_num: int,
-                             recorder: mlogging.MainProcessLogger):
+                            recorder: mlogging.MainProcessLogger):
         step_flags = []
         self.network.train()
         self.dis_nn.eval()
         self.optimizer.zero_grad(set_to_none=True)
+
+        # ✅ (선택) 이 "업데이트 1회" 동안의 peak mem을 보고 싶으면 여기서 reset
+        # 원래 동작 해치지 않음 (통계만 reset)
+        do_wandb = (ACC.is_main_process and (wandb.run is not None))
+        if do_wandb and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+
         with xnn.without_autograd(self.dis_nn):  # !
             for cd, (batch_input, step_flag) in utils.iter.cd_enumerate(accumulated_batch):
                 with self.grad_sync_context(cd == 0):
                     nn_output = self.network(batch_input['audio'])
-                    gen_weighted_sum, gen_loss_dict = self.dis_nn(fake=nn_output['generated_audio'],
-                                                                  real=batch_input['audio'],
-                                                                  get_gen_loss=True)
+                    gen_weighted_sum, gen_loss_dict = self.dis_nn(
+                        fake=nn_output['generated_audio'],
+                        real=batch_input['audio'],
+                        get_gen_loss=True
+                    )
                     nn_output['gen_loss'] = gen_weighted_sum
                     weighted_sum, loss_dict = self.loss_nn(nn_output, batch_input)
+
                     ACC.backward(weighted_sum / accumulate_num)
                     param_norm = ACC.clip_grad_norm_(self.network.parameters(), self.mc.grad_max_norm)
+
                     if step_flag:
                         step_flags.append(step_flag)
+
+                        # ✅ 기존 recorder 동작 유지
                         recorder.variables(loss_dict, namespace='training/', prog_bar=True)
                         recorder.variable("training/loss_sum", weighted_sum, prog_bar=True)
-                        recorder.variable(f"training/param_norm", param_norm, prog_bar=True)
+                        recorder.variable("training/param_norm", param_norm, prog_bar=True)
 
+                        # ✅ W&B: commit=False는 유지하되, step을 "이번 업데이트 step"으로 고정
+                        # scheduler.step()은 아래에서 호출되므로, 여기서는 "다음 step"을 미리 계산해서 씀
+                        if do_wandb:
+                            step = int(self.scheduler.scheduler.last_epoch) + 1  # 곧 scheduler.step()될 step
+
+                            log_dict = {f"train/{k}": (v.item() if torch.is_tensor(v) else v)
+                                        for k, v in loss_dict.items()}
+                            log_dict["train/loss_sum"] = (weighted_sum.item()
+                                                        if torch.is_tensor(weighted_sum) else float(weighted_sum))
+                            log_dict["train/param_norm"] = (param_norm.item()
+                                                            if torch.is_tensor(param_norm) else float(param_norm))
+
+                            wandb.log(log_dict, step=step, commit=False)
+
+        # ✅ 원래 학습 업데이트 유지
         self.optimizer.step()
 
         if len(step_flags) > 0:
             assert len(step_flags) == 1, "You should set smaller steps_per_epoch_num! "
-            learning_rate = self.step_scheduler(self.scheduler)
-            recorder.variable(f"training/lr", learning_rate, prog_bar=False)
+
+            # ✅ scheduler 진행 + lr 기록 (원래 그대로)
+            learning_rate = self.step_scheduler(self.scheduler)  # 내부에서 scheduler.step()
+            recorder.variable("training/lr", learning_rate, prog_bar=False)
+
+            # ✅ W&B 마감(commit=True): 같은 step으로 마감
+            if do_wandb:
+                step = int(self.scheduler.scheduler.last_epoch)  # 이제 last_epoch가 실제 step으로 증가한 상태
+
+                log_dict = {"train/lr": float(learning_rate)}
+
+                pt = self.param_tracker()
+                for k, v in pt.items():
+                    log_dict[f"train/{k}"] = (v.item() if torch.is_tensor(v) else v)
+
+                if torch.cuda.is_available():
+                    log_dict["gpu/peak_mem_MB"] = torch.cuda.max_memory_allocated() / 1024**2
+
+                wandb.log(log_dict, step=step, commit=True)
+
+            # ✅ 기존 recorder 동작 유지
             recorder.variables(self.param_tracker(), namespace='training/', prog_bar=False)
 
     def evaluate(self, dataloader, name="evaluating"):
@@ -261,3 +340,4 @@ class Model:
 
         self.dis_nn.forward = orig_dis_nn_forward
         return recorder.get_results()
+
