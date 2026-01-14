@@ -1,6 +1,7 @@
 # L3AC
-This is repository contains the training setup forstrictly causal l3ac.
 ---
+This is repository contains the training setup forstrictly causal l3ac.
+
 
 ## Environment Setup
 
