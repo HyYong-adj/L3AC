@@ -53,7 +53,7 @@ WANDB_DISABLED=true ONLY_EVAL=1 accelerate launch --num_processes=1 --mixed_prec
 |Adjust --config to match your available config names.
 
 ## Overview
-This repository extends the L3AC baseline by enforcing strict causality across the entire architecture. 
-While the original paper claims causality, only the local transformer was causal and most convolutional operations exhibited future look-ahead (~100 ms). 
-We replace all non-causal convolutions with **strict causal variants **and introduce **CausalGRNEMA**, a causal reformulation of ConvNeXt-V2’s GRN using EMA to avoid future leakage. 
+This repository extends the L3AC baseline by enforcing strict causality across the entire architecture.\
+While the original paper claims causality, only the local transformer was causal and most convolutional operations exhibited future look-ahead (~100 ms).\
+We replace all non-causal convolutions with **strict causal variants** and introduce **CausalGRNEMA**, a causal reformulation of ConvNeXt-V2’s GRN using EMA to avoid future leakage.\
 This ensures the model is suitable for **streaming-safe** audio generation and coding.
