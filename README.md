@@ -51,7 +51,7 @@ accelerate launch --num_processes=1 $(pwd)/src/main.py --config 3kbps_music
 #test eval
 WANDB_DISABLED=true ONLY_EVAL=1 accelerate launch --num_processes=1 --mixed_precision bf16 $(pwd)/src/main.py --config 3kbps_music
 ```
-|Adjust --config to match your available config names.
+| Adjust --config to match your available config names.
 
 ## Overview
 This repository extends the L3AC baseline by enforcing strict causality across the entire architecture.\
