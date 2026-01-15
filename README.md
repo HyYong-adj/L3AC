@@ -53,6 +53,13 @@ WANDB_DISABLED=true ONLY_EVAL=1 accelerate launch --num_processes=1 --mixed_prec
 ```
 | Adjust --config to match your available config names.
 
+
+## install L3AC
+```bash
+cd L3AC
+pip install -e .
+```
+
 ## Overview
 This repository extends the L3AC baseline by enforcing strict causality across the entire architecture.\
 While the original paper claims causality, only the local transformer was causal and most convolutional operations exhibited future look-ahead (~100 ms).\
