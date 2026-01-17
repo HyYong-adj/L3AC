@@ -7,7 +7,7 @@ from pydantic import computed_field, field_validator, ValidationInfo
 
 from .en_codec import ModelConfig
 from .en_codec import EnCodec
-from xtract.config import FileConfig
+from l3ac.xtract.config import FileConfig
 
 CONFIG_DIR = Path(__file__).parent / "configs"
 
@@ -119,4 +119,3 @@ class L3AC:
         q_feature = self.network.en_decoder(audio_feature)
         audio_data = self.network.decoder(q_feature).squeeze(1)
         return audio_data
-
