@@ -134,13 +134,23 @@ class Encoder(nn.Module):
         cur = 0
         for i_d, o_d, stride, depth in zip(dims[:-1], dims[1:], strides, depths):
             stage = nn.Sequential(
-                *[BaseUnit(dim=i_d, drop_rate=drop_path_rates[cur + j], snake_act=use_snake_act, norm=use_norm)
+                *[BaseUnit(dim=i_d,
+                           drop_rate=drop_path_rates[cur + j],
+                           snake_act=use_snake_act,
+                           norm=use_norm,
+                           causal=causal)
                   for j in range(depth)]
             )
-            down_layer = nn.Sequential(
-                Conv1d(i_d, o_d, kernel_size=stride, stride=stride),
-                ChannelNorm(o_d, data_format="channels_first") if use_norm else nn.Identity()
-            )
+            if causal:
+                down_layer = nn.Sequential(
+                    CausalConv1d(i_d, o_d, kernel_size=stride, stride=stride),
+                    ChannelNorm(o_d, data_format="channels_first") if use_norm else nn.Identity()
+                )
+            else:
+                down_layer = nn.Sequential(
+                    Conv1d(i_d, o_d, kernel_size=stride, stride=stride),
+                    ChannelNorm(o_d, data_format="channels_first") if use_norm else nn.Identity()
+                )
             blocks += [stage, down_layer]
             cur += depth
 
@@ -152,7 +162,8 @@ class Encoder(nn.Module):
                 *[BaseUnit(dim=dims[-1], 
                            drop_rate=drop_path_rates[cur + j], 
                            snake_act=use_snake_act, 
-                           norm=use_norm)
+                           norm=use_norm,
+                           causal=causal)
                   for j in range(depths[-1])]
             ),
             last_conv,
@@ -211,7 +222,11 @@ class Decoder(nn.Module):
         cur = 0
         for i_d, o_d, stride, depth in zip(dims[:-1], dims[1:], strides, depths):
             stage = nn.Sequential(
-                *[BaseUnit(dim=i_d, drop_rate=drop_path_rates[cur + j], snake_act=use_snake_act, norm=use_norm)
+                *[BaseUnit(dim=i_d,
+                           drop_rate=drop_path_rates[cur + j],
+                           snake_act=use_snake_act,
+                           norm=use_norm,
+                           causal=causal)
                   for j in range(depth)]
             )
             upsample = nn.Upsample(scale_factor=stride, mode='nearest') if causal else \
@@ -230,19 +245,23 @@ class Decoder(nn.Module):
 
         if decoder_last_layer is None:
             last_block += [nn.Sequential(
-                *[BaseUnit(dim=dims[-1], drop_rate=0., snake_act=use_snake_act, norm=use_norm)
+                *[BaseUnit(dim=dims[-1],
+                           drop_rate=0.,
+                           snake_act=use_snake_act,
+                           norm=use_norm,
+                           causal=causal)
                   for _ in range(2)])]
         elif decoder_last_layer == 'legacy':
             last_block += [nn.Sequential(
-                ResidualLegacyUnit(dims[-1], dilation=1, snake_act=True, norm=False),
-                ResidualLegacyUnit(dims[-1], dilation=3, snake_act=True, norm=False),
-                ResidualLegacyUnit(dims[-1], dilation=9, snake_act=True, norm=False),
+                ResidualLegacyUnit(dims[-1], dilation=1, snake_act=True, norm=False, causal=causal),
+                ResidualLegacyUnit(dims[-1], dilation=3, snake_act=True, norm=False, causal=causal),
+                ResidualLegacyUnit(dims[-1], dilation=9, snake_act=True, norm=False, causal=causal),
             )]
         elif decoder_last_layer == 'dilation':
             last_block += [nn.Sequential(
-                ResidualUnit(dims[-1], dilation=1, drop_rate=0., snake_act=use_snake_act, norm=use_norm),
-                ResidualUnit(dims[-1], dilation=3, drop_rate=0., snake_act=use_snake_act, norm=use_norm),
-                ResidualUnit(dims[-1], dilation=9, drop_rate=0., snake_act=use_snake_act, norm=use_norm),
+                ResidualUnit(dims[-1], dilation=1, drop_rate=0., snake_act=use_snake_act, norm=use_norm, causal=causal),
+                ResidualUnit(dims[-1], dilation=3, drop_rate=0., snake_act=use_snake_act, norm=use_norm, causal=causal),
+                ResidualUnit(dims[-1], dilation=9, drop_rate=0., snake_act=use_snake_act, norm=use_norm, causal=causal),
             )]
         else:
             raise NotImplementedError(decoder_last_layer)
