@@ -2,7 +2,7 @@
 
 This repository contains a customized L3AC architecture (train branch) and utilities to load pretrained weights hosted on Hugging Face.
 
-* Code (architecture, training, inference):
+* Code (architecture, training):
   https://github.com/HyYong-adj/L3AC/tree/train
 * Pretrained weights (MTG-Jamendo):
   https://huggingface.co/choihy/mtg-l3ac
