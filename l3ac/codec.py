@@ -5,7 +5,7 @@ import torch
 from pydantic import BaseModel, model_validator, Field, computed_field
 from torch import nn
 
-import l3ac.xtract.nn as xnn
+import xtract.nn as xnn
 from l3ac import modules
 from l3ac.vq import build_vq
 
@@ -23,6 +23,7 @@ class ModelConfig(BaseModel):
     use_snake_act: bool = True
     decoder_last_layer: str = None
     vq_config: dict = Field(default=dict(name="super_fsq", levels=[7, 7, 7, 7, 7, 7], noise_rate=0.5))
+    causal: bool = False
 
     @computed_field
     @cached_property
@@ -49,6 +50,7 @@ class Codec(xnn.Module):
             drop_path_rate=0.0,
             use_norm=mc.use_norm,
             use_snake_act=mc.use_snake_act,
+            causal=mc.causal,
         )
 
         self.quantizer = build_vq(feature_dim=mc.feature_dim, **mc.vq_config)
@@ -62,6 +64,7 @@ class Codec(xnn.Module):
             use_norm=mc.use_norm,
             use_snake_act=mc.use_snake_act,
             decoder_last_layer=mc.decoder_last_layer,
+            causal=mc.causal,
         )
 
     @property
@@ -78,10 +81,10 @@ class Codec(xnn.Module):
 
     def preprocess(self, audio_data):
         length = audio_data.shape[-1]
-        pad_len = math.ceil(length / self.fill_length) * self.fill_length - length
-        # audio_data = nn.functional.pad(audio_data, (pad_len, 0))  # ! left pad or right pad?
+        pad_len = math.ceil(length / self.fill_length) * self.fill_length - length # make multiple of hop_length
+        # audio_data = nn.functional.pad(audio_data, (pad_len, 0))  # ! left pad or right pad?v #causal
         audio_data = nn.functional.pad(audio_data, (0, pad_len))
-        return audio_data, length
+        return audio_data, length, pad_len 
 
     def forward(
             self,
@@ -93,17 +96,19 @@ class Codec(xnn.Module):
         audio_data : Tensor[B x T]
             Audio data to encode
         """
-        audio_data, audio_length = self.preprocess(audio_data)
+        audio_data, audio_length, pad_len = self.preprocess(audio_data)
 
         feature = self.encoder(audio_data.unsqueeze(1)).permute(0, 2, 1)
 
         q_feature, indices, network_loss = self.quantizer(feature)
 
         y = self.decoder(q_feature.permute(0, 2, 1)).squeeze(1)
-
+        generated = y[...,:-pad_len] if pad_len >0 else y
+        print(f"decoder_output: {y}, org_audio_length: {audio_length}, pad_len: {pad_len}, generated shape: {generated.shape}")
+        generated = generated[..., :audio_length]
         return {
-            # 'generated_audio': y[..., -audio_length:],  # ! left pad or right pad?
-            'generated_audio': y[..., :audio_length],
+            # 'generated_audio': y[..., -audio_length:],  # ! left pad or right pad? #causal
+            'generated_audio': generated,
             'embedded_audio': q_feature,
             'embedded_indices': indices,
             'network_loss': [('nn', network_loss, 10.0), ],
@@ -131,7 +136,7 @@ class Codec(xnn.Module):
         process_window : int
         """
         assert len(audio_data) == 1, 'Only support batch size 1'
-        audio_data, audio_length = self.preprocess(audio_data)
+        audio_data, audio_length, pad_len = self.preprocess(audio_data)
         process_window = process_window // self.fill_length * self.fill_length
 
         chunk_audio = ChunkData(chunk_len=process_window, prefix_len=self.fill_length, original_data=audio_data[0])
@@ -186,3 +191,4 @@ class ChunkData:
                 else:
                     chunk_data.append(self._original_data[i - self.prefix_len:i + self.chunk_len])
             return chunk_data
+
