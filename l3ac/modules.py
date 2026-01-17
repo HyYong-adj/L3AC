@@ -1,23 +1,55 @@
 import torch
 from torch import nn
-
-from l3ac.layers import ChannelNorm, Conv1d, Linear, GRN, Snake1d
-from l3ac.xtract.nn.layers import Residual
+import torch.nn.functional as F
+from l3ac.layers import ChannelNorm, Conv1d, Linear, GRN, CausalGRNEMA, GRN_3d, CausalGRNRMS, Snake1d
+from xtract.nn.layers import Residual
 
 from .tconv import FirstBlock, EnhanceBlock
 
+def _left_pad_1d(x: torch.Tensor, pad: int, value: float = 0.0):
+    if pad <= 0:
+        return x
+    return F.pad(x, (pad, 0), mode="constant", value=value)
+
+class CausalConv1d(nn.Module):
+    """
+    Strict causal Conv1d wrapper:
+    y[t] depends only on x[:t]
+    """
+    def __init__(self, in_ch, out_ch, kernel_size, stride=1, dilation=1, groups=1, bias=True):
+        super().__init__()
+        self.kernel_size = int(kernel_size)
+        self.dilation = int(dilation)
+        self.stride = int(stride)
+        self.conv = Conv1d(
+            in_ch, out_ch,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            dilation=self.dilation,
+            padding=0,
+            groups=groups,
+            bias=bias,
+        )
+
+    def forward(self, x):
+        left = (self.kernel_size - 1) * self.dilation
+        x = _left_pad_1d(x, left)
+        return self.conv(x)
+    
 
 class ConvUnit(nn.Module):
-    """
-    Args:
-        dim (int): Number of input channels.
-    """
-
-    def __init__(self, dim, snake_act=True, norm=False, dilation=1, kernel_size=7):
+    def __init__(self, dim, snake_act=True, norm=False, dilation=1, kernel_size=7, causal: bool = False):
         super().__init__()
-        total_pad = (kernel_size - 1) * dilation
-        self.dw_conv = Conv1d(dim, dim, kernel_size=kernel_size, dilation=dilation, padding=total_pad // 2,
-                              groups=dim)  # depth-wise conv
+        """
+        Args:
+            dim (int): Number of input channels.
+        """
+        if causal: #CausalGRNRMS
+            self.dw_conv = CausalConv1d(dim, dim, kernel_size=kernel_size, dilation=dilation, groups=dim)
+        else: #GRN_3d
+            total_pad = (kernel_size - 1) * dilation
+            self.dw_conv = Conv1d(dim, dim, kernel_size=kernel_size, dilation=dilation, padding=total_pad // 2,
+                                  groups=dim)  # depth-wise conv
 
         self.norm = ChannelNorm(dim, data_format="channels_last") if norm else nn.Identity()
         self.pw_conv1 = Linear(dim, 4 * dim)  # point-wise/1x1 conv, implemented with linear layer
@@ -26,7 +58,15 @@ class ConvUnit(nn.Module):
             self.act = Snake1d(4 * dim, data_format="channels_last")
         else:
             self.act = nn.GELU()
-        self.grn = GRN(4 * dim)
+        if causal:
+            self.grn = CausalGRNEMA(
+                4 * dim,
+                alpha=0.99,
+                data_format="channels_last",
+            )
+        else:
+            self.grn = GRN(4 * dim, data_format="channels_last")
+
         self.pw_conv2 = Linear(4 * dim, dim)
 
     def forward(self, x):
@@ -45,14 +85,17 @@ ResidualUnit = lambda *args, drop_rate=0., **kwargs: Residual(ConvUnit(*args, **
 
 
 class LegacyUnit(nn.Module):
-    def __init__(self, dim, snake_act=True, norm=False, dilation=1, kernel_size=7):
+    def __init__(self, dim, snake_act=True, norm=False, dilation=1, kernel_size=7, causal: bool = False):
         super().__init__()
         assert snake_act, "LegacyUnit only supports snake_act=True"
         assert norm == False, "LegacyUnit only supports norm=False"
-        total_pad = (kernel_size - 1) * dilation
+        
+        conv = CausalConv1d(dim, dim, kernel_size=kernel_size, dilation=dilation) if causal else \
+               Conv1d(dim, dim, kernel_size=kernel_size, dilation=dilation, padding=((kernel_size - 1) * dilation) // 2)
+
         self.block = nn.Sequential(
             Snake1d(dim),
-            Conv1d(dim, dim, kernel_size=kernel_size, dilation=dilation, padding=total_pad // 2),
+            conv,
             Snake1d(dim),
             Conv1d(dim, dim, kernel_size=1),
         )
@@ -78,12 +121,13 @@ class Encoder(nn.Module):
             drop_path_rate: float = 0.0,
             use_norm=False,
             use_snake_act=True,
+            causal: bool = False,
     ):
         super().__init__()
         # Create first convolution
         blocks = [
             # Conv1d(1, dims[0], kernel_size=7, padding=3),
-            FirstBlock(dims[0]),
+            FirstBlock(dims[0], causal=causal), #causal setting
         ]
 
         drop_path_rates = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
@@ -101,13 +145,19 @@ class Encoder(nn.Module):
             cur += depth
 
         # Create last convolution
+        last_conv = CausalConv1d(dims[-1], feature_dim, kernel_size=3) if causal else \
+                    Conv1d(dims[-1], feature_dim, kernel_size=3, padding=1)
         blocks += [
             nn.Sequential(
-                *[BaseUnit(dim=dims[-1], drop_rate=drop_path_rates[cur + j], snake_act=use_snake_act, norm=use_norm)
+                *[BaseUnit(dim=dims[-1], 
+                           drop_rate=drop_path_rates[cur + j], 
+                           snake_act=use_snake_act, 
+                           norm=use_norm)
                   for j in range(depths[-1])]
             ),
+            last_conv,
             # Snake1d(dims[-1]),
-            Conv1d(dims[-1], feature_dim, kernel_size=3, padding=1),
+
         ]
 
         self.blocks = nn.Sequential(*blocks)
@@ -143,12 +193,19 @@ class Decoder(nn.Module):
             use_snake_act=True,
             use_norm=False,
             decoder_last_layer="legacy",
+            causal: bool = False,
     ):
         super().__init__()
         # Create first convolution
-        blocks = [
-            Conv1d(feature_dim, dims[0], kernel_size=3, padding=1),
-        ]
+        if causal:
+            blocks = [
+                CausalConv1d(feature_dim, dims[0], kernel_size=3),
+            ]
+        else:
+            blocks = [
+                Conv1d(feature_dim, dims[0], kernel_size=3, padding=1),
+            ]
+        
 
         drop_path_rates = [x.item() for x in torch.linspace(drop_path_rate, 0, sum(depths))]
         cur = 0
@@ -157,12 +214,16 @@ class Decoder(nn.Module):
                 *[BaseUnit(dim=i_d, drop_rate=drop_path_rates[cur + j], snake_act=use_snake_act, norm=use_norm)
                   for j in range(depth)]
             )
+            upsample = nn.Upsample(scale_factor=stride, mode='nearest') if causal else \
+                       nn.Upsample(scale_factor=stride, mode='linear')
             up_layer = nn.Sequential(
                 Conv1d(i_d, o_d, kernel_size=1, stride=1),
-                nn.Upsample(scale_factor=stride, mode='linear', align_corners=False),
+                upsample,
+                CausalConv1d(o_d, o_d, kernel_size=3) if causal else \
+                nn.Identity(),
                 ChannelNorm(o_d, data_format="channels_first") if use_norm else nn.Identity()
             )
-            blocks += [stage, EnhanceBlock(i_d), up_layer]  # !
+            blocks += [stage, EnhanceBlock(i_d,causal=causal), up_layer]  # !
             cur += depth
 
         last_block = []
@@ -187,10 +248,12 @@ class Decoder(nn.Module):
             raise NotImplementedError(decoder_last_layer)
 
         # Add final conv layer
+        last_conv = CausalConv1d(dims[-1], 1, kernel_size=7) if causal else \
+                    Conv1d(dims[-1], 1, kernel_size=7, padding=3)
         last_block += [
             # EnhanceBlock(dims[-1]),  # !
             Snake1d(dims[-1]),
-            Conv1d(dims[-1], 1, kernel_size=7, padding=3),
+            last_conv,
             nn.Tanh(),
         ]
         last_block = LastBlock(nn.Sequential(*last_block), high_precision=False)
