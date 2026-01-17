@@ -1,67 +1,176 @@
-# L3AC_training
----
-This is repository contains the training setup for strictly causal L3AC.
+# L3AC (Train Branch – MTG-Jamendo Weights)
 
+This repository contains a customized L3AC architecture (train branch) and utilities to load pretrained weights hosted on Hugging Face.
 
-## Environment Setup
+* Code (architecture, training, inference):
+  https://github.com/HyYong-adj/L3AC/tree/train
+* Pretrained weights (MTG-Jamendo):
+  https://huggingface.co/choihy/mtg-l3ac
 
-### 1) Create conda environment
+This design follows the upstream L3AC philosophy:
 
+* Code is installed via pip
+* Model weights are downloaded on demand and cached locally
+
+## Installation
+### 1) Install directly from GitHub (recommended)
+
+You can install this train branch directly using pip:
 ```bash
-conda create -n l3ac cuda=12.6 python=3.13 -c nvidia
-conda activate l3ac
-```
-### 2) Install PyTorch (CUDA 12.6)
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-```
-### 3) Install dependencies
-```bash
-pip install accelerate datasets einops pynvml tensorboard
-pip install pydantic-settings lz4 bidict
-pip install scipy seaborn rich
-
-pip install local-attention
-
-pip install soundfile librosa
-pip install openai-whisper pesq pystoi jiwer ptflops
-```
-### 4) DAC-related dependencies
-```bash
-pip install git+https://github.com/carlthome/audiotools.git@upgrade-dependencies
-pip install descript-audio-codec
-```
-## Data Preparation
-
-Data preprocessing scripts are located under:
-```bash
-./src/prepare/data_process
+pip install "git+https://github.com/HyYong-adj/L3AC.git@train"
 ```
 
-Follow the scripts in that directory to build your dataset / metadata.
+For development or modification:
 ```bash
-# data prepare
-see scripts in ./src/prepare/data_process
-# in this repository we use mtg_now.py
-```
-## training model
-```bash
-# training model
-accelerate launch --num_processes=1 $(pwd)/src/main.py --config 3kbps_music
-#test eval
-WANDB_DISABLED=true ONLY_EVAL=1 accelerate launch --num_processes=1 --mixed_precision bf16 $(pwd)/src/main.py --config 3kbps_music
-```
-| Adjust --config to match your available config names.
-
-
-## install L3AC
-```bash
+git clone -b train https://github.com/HyYong-adj/L3AC.git
 cd L3AC
 pip install -e .
 ```
 
-## Overview
-This repository extends the L3AC baseline by enforcing strict causality across the entire architecture.\
-While the original paper claims causality, only the local transformer was causal and most convolutional operations exhibited future look-ahead (~100 ms).\
-We replace all non-causal convolutions with **strict causal variants** and introduce **CausalGRNEMA**, a causal reformulation of ConvNeXt-V2’s GRN using EMA to avoid future leakage.\
-This ensures the model is suitable for **streaming-safe** audio generation and coding.
+⚠️ If you already have the official l3ac installed from PyPI, uninstall it first to avoid conflicts:
+
+```bash
+pip uninstall -y l3ac
+```
+
+### 2) Optional dependency (demo)
+
+To run the demo example below, install librosa:
+
+pip install librosa
+
+```bash
+Quickstart: Encode & Decode Audio
+import librosa
+import torch
+import l3ac
+
+# List available model configs (from l3ac/configs/*.toml)
+print("Available models:", l3ac.list_models())
+
+MODEL_USED = "1kbps_music"   # example config name
+codec = l3ac.get_model(MODEL_USED)
+
+print("Loaded model:", MODEL_USED)
+print("Codec sample rate:", codec.config.sample_rate)
+
+# Load example audio
+sample_audio, sample_rate = librosa.load(librosa.example("libri1"))
+sample_audio = sample_audio[None, :]
+sample_audio = librosa.resample(
+    sample_audio,
+    orig_sr=sample_rate,
+    target_sr=codec.config.sample_rate
+)
+
+codec.network.cuda()
+codec.network.eval()
+
+with torch.inference_mode():
+    audio_in = torch.tensor(sample_audio, dtype=torch.float32, device="cuda")
+    _, audio_length = audio_in.shape
+
+    q_feature, indices = codec.encode_audio(audio_in)
+    audio_out = codec.decode_audio(q_feature)
+    generated_audio = audio_out[:, :audio_length].detach().cpu().numpy()
+
+mse = ((sample_audio - generated_audio) ** 2).mean().item()
+print(f"MSE: {mse}")
+```
+----
+## Pretrained Weights (Hugging Face)
+
+Pretrained weights are hosted on Hugging Face:
+
+👉 https://huggingface.co/choihy/mtg-l3ac
+
+### Weight download behavior
+
+* When get_model() is called:
+
+1. The config (.toml) specifies model_name and model_version
+2. The corresponding weights are downloaded from Hugging Face
+3. Weights are cached locally
+4. Subsequent runs reuse the cached weights
+
+### Default cache location
+```text
+~/.cache/l3ac/<model_name>.<model_version>/
+```
+If the weights already exist, downloading is skipped.
+----
+
+## Hugging Face Repository Structure
+
+The Hugging Face model repository follows this layout:
+
+```text
+choihy/mtg-l3ac
+├─ README.md
+└─ weights/
+   └─ <model_name>.<model_version>/
+      ├─ encoder.pt
+      ├─ decoder.pt
+      ├─ quantizer.pt
+      └─ ...
+```
+
+Each .pt file corresponds to one trainable module defined in the L3AC network.
+----
+
+## Model Configuration
+
+Model configurations are stored in:
+```text
+l3ac/configs/*.toml
+```
+
+Example (1kbps_music.toml):
+```toml
+model_name = "mtg_l3ac"
+model_version = "1kbps"
+sample_rate = 16000
+
+[network_config]
+# architecture definition
+```
+
+If weight_url is **not explicitly set**, the code automatically resolves the URL to the Hugging Face repository.
+----
+## Using Your Own Trained Weights
+### Option A) Upload to Hugging Face (recommended)
+
+1. Upload your trained weights to:
+```arduino
+https://huggingface.co/choihy/mtg-l3ac
+```
+2. Follow the directory structure shown above
+3. Set model_name and model_version in the config
+4. Call:
+```python
+codec = l3ac.get_model("<config_name>")
+```
+No code changes are required.
+----
+### Option B) Use local weights (offline)
+
+Place your module weights manually into:
+'''python
+~/.cache/l3ac/<model_name>.<model_version>/
+```
+Then run:
+```python
+codec = l3ac.get_model("<config_name>")
+```
+----
+## Reproducibility Tips
+
+* For stable experiments, pin a commit hash:
+````bash
+pip install "git+https://github.com/HyYong-adj/L3AC.git@<COMMIT_SHA>"
+```
+* Keep model_name + model_version immutable once published
+
+Acknowledgements
+
+This repository is based on the original L3AC project and extends it for research on streaming neural audio codecs and music-domain training (MTG-Jamendo).
