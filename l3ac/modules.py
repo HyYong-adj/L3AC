@@ -235,7 +235,8 @@ class Decoder(nn.Module):
                 Conv1d(i_d, o_d, kernel_size=1, stride=1),
                 upsample,
                 # post-upsample temporal smoothing (causal)
-                # CausalConv1d(o_d, o_d, kernel_size=3)
+                # CausalConv1d(o_d, o_d, kernel_size=3) if causal else \
+                # nn.Identity(),
                 ChannelNorm(o_d, data_format="channels_first") if use_norm else nn.Identity()
             )
             blocks += [stage, EnhanceBlock(i_d,causal=causal), up_layer]  # !
