@@ -98,6 +98,7 @@ Pretrained weights are hosted on Hugging Face:
 ~/.cache/l3ac/<model_name>.<model_version>/
 ```
 If the weights already exist, downloading is skipped.
+
 ----
 
 ## Hugging Face Repository Structure
@@ -116,6 +117,7 @@ choihy/mtg-l3ac
 ```
 
 Each .pt file corresponds to one trainable module defined in the L3AC network.
+
 ----
 
 ## Model Configuration
@@ -136,6 +138,7 @@ sample_rate = 16000
 ```
 
 If weight_url is **not explicitly set**, the code automatically resolves the URL to the Hugging Face repository.
+
 ----
 ## Using Your Own Trained Weights
 ### Option A) Upload to Hugging Face (recommended)
@@ -151,6 +154,7 @@ https://huggingface.co/choihy/mtg-l3ac
 codec = l3ac.get_model("<config_name>")
 ```
 No code changes are required.
+
 ----
 ### Option B) Use local weights (offline)
 
@@ -170,7 +174,7 @@ codec = l3ac.get_model("<config_name>")
 pip install "git+https://github.com/HyYong-adj/L3AC.git@<COMMIT_SHA>"
 ```
 * Keep model_name + model_version immutable once published
-
-Acknowledgements
+----
+## Acknowledgements
 
 This repository is based on the original L3AC project and extends it for research on streaming neural audio codecs and music-domain training (MTG-Jamendo).
