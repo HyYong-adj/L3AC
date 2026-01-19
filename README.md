@@ -5,7 +5,7 @@ This repository contains a customized L3AC architecture (train branch) and utili
 * training Code (architecture, training):
   https://github.com/HyYong-adj/L3AC/tree/train
 * Pretrained weights (MTG-Jamendo):
-  https://huggingface.co/choihy/l3ac_weight/tree/main
+  https://huggingface.co/choihy/l3ac_weight
 
 This design follows the upstream L3AC philosophy:
 
@@ -83,7 +83,7 @@ print(f"MSE: {mse}")
 
 Pretrained weights are hosted on Hugging Face:
 
-👉 https://huggingface.co/choihy/l3ac_weight/tree/main
+👉 https://huggingface.co/choihy/l3ac_weight
 
 ### Weight download behavior
 
@@ -111,6 +111,15 @@ choihy/l3ac_weight
 ├─ README.md
 └─ weights/
    └─ <model_name>.<model_version>/
+      ├─ encoder.pt
+      ├─ decoder.pt
+      ├─ quantizer.pt
+      └─ ...
+# for 3kbps_music
+choihy/l3ac_weight
+├─ README.md
+└─ weights/
+   └─ 3kbps_music.v1/
       ├─ encoder.pt
       ├─ decoder.pt
       ├─ quantizer.pt
@@ -146,7 +155,7 @@ If weight_url is **not explicitly set**, the code automatically resolves the URL
 
 1. Upload your trained weights to:
 ```arduino
-https://huggingface.co/choihy/l3ac_weight/tree/main
+https://huggingface.co/choihy/l3ac_weight
 ```
 2. Follow the directory structure shown above
 3. Set model_name and model_version in the config
