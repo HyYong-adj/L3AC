@@ -114,7 +114,8 @@ choihy/l3ac_weight
       ├─ encoder.pt
       ├─ decoder.pt
       ├─ quantizer.pt
-      └─ ...
+      ├─ en_encoder.pt
+      └─ en_decoder.pt
 # for 3kbps_music
 choihy/l3ac_weight
 ├─ README.md
