@@ -83,7 +83,7 @@ print(f"MSE: {mse}")
 
 Pretrained weights are hosted on Hugging Face:
 
-👉 https://huggingface.co/choihy/mtg-l3ac
+👉 https://huggingface.co/choihy/l3ac_weight/tree/main
 
 ### Weight download behavior
 
