@@ -1,4 +1,4 @@
-model_name = "3kbps"
+model_name = "3kbps_music"
 sample_rate = 16000
 model_version = "v1"
 
