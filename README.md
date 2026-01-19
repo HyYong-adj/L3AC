@@ -107,7 +107,7 @@ If the weights already exist, downloading is skipped.
 The Hugging Face model repository follows this layout:
 
 ```text
-choihy/weight
+choihy/l3ac_weight
 ├─ README.md
 └─ weights/
    └─ <model_name>.<model_version>/
@@ -130,8 +130,8 @@ l3ac/configs/*.toml
 
 Example (1kbps_music.toml):
 ```toml
-model_name = "l3ac_weight"
-model_version = "1kbps"
+model_name = "3kbps_music"
+model_version = "v1"
 sample_rate = 16000
 
 [network_config]
