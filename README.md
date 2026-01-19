@@ -5,7 +5,7 @@ This repository contains a customized L3AC architecture (train branch) and utili
 * training Code (architecture, training):
   https://github.com/HyYong-adj/L3AC/tree/train
 * Pretrained weights (MTG-Jamendo):
-  https://huggingface.co/choihy/mtg-l3ac
+  https://huggingface.co/choihy/l3ac_weight/tree/main
 
 This design follows the upstream L3AC philosophy:
 
