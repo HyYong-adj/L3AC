@@ -2,7 +2,7 @@
 
 This repository contains a customized L3AC architecture (train branch) and utilities to load pretrained weights hosted on Hugging Face.
 
-* Code (architecture, training):
+* training Code (architecture, training):
   https://github.com/HyYong-adj/L3AC/tree/train
 * Pretrained weights (MTG-Jamendo):
   https://huggingface.co/choihy/mtg-l3ac
@@ -15,9 +15,10 @@ This design follows the upstream L3AC philosophy:
 ## Installation
 ### 1) Install directly from GitHub (recommended)
 
-You can install this train branch directly using pip:
+You can install this main branch directly using pip:
 ```bash
-pip install "git+https://github.com/HyYong-adj/L3AC.git@train"
+pip install "git+https://github.com/HyYong-adj/L3AC.git"
+"
 ```
 
 For development or modification:
