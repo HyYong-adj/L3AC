@@ -107,7 +107,7 @@ If the weights already exist, downloading is skipped.
 The Hugging Face model repository follows this layout:
 
 ```text
-choihy/mtg-l3ac
+choihy/weight
 ├─ README.md
 └─ weights/
    └─ <model_name>.<model_version>/
@@ -130,7 +130,7 @@ l3ac/configs/*.toml
 
 Example (1kbps_music.toml):
 ```toml
-model_name = "mtg_l3ac"
+model_name = "l3ac_weight"
 model_version = "1kbps"
 sample_rate = 16000
 
@@ -146,7 +146,7 @@ If weight_url is **not explicitly set**, the code automatically resolves the URL
 
 1. Upload your trained weights to:
 ```arduino
-https://huggingface.co/choihy/mtg-l3ac
+https://huggingface.co/choihy/l3ac_weight/tree/main
 ```
 2. Follow the directory structure shown above
 3. Set model_name and model_version in the config
