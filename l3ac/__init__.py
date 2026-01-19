@@ -75,9 +75,11 @@ class L3ACConfig(FileConfig):
     @classmethod
     def init_weight_url(cls, weight_url: str, info: ValidationInfo):
         if weight_url is None:
-            weight_url = (f"https://huggingface.co/choihy/l3ac_weight/tree/main"
-                          f"{info.data['model_name']}.{info.data['model_version']}/"
-                          "{}.pt")
+            weight_url = (
+                "https://huggingface.co/choihy/l3ac_weight/resolve/main/weights/"
+                f"{info.data['model_name']}.{info.data['model_version']}/"
+                "{}.pt"
+            )
         return weight_url
 
 
