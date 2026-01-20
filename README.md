@@ -1,6 +1,7 @@
 # L3AC (Train Branch – MTG-Jamendo Weights)
 
 This repository contains a customized L3AC architecture (train branch) and utilities to load pretrained weights hosted on Hugging Face.
+<img width="1019" height="316" alt="image" src="https://github.com/user-attachments/assets/a4ab20ac-8941-4bb7-a88a-9b3c8a40b3e4" />
 
 * training Code (architecture, training):
   https://github.com/HyYong-adj/L3AC/tree/train
