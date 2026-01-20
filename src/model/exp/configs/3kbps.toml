@@ -58,7 +58,7 @@ en_coder_window_size = 400  # edit
 en_coder_dynamic_pos = true
 en_coder_compress_rate = 1  # edit
 en_coder_cache_size = 0
-causal = False
+causal = false
 
 [dis_nn_config]
 fft_size = [126, 542, 1418, 2296]
