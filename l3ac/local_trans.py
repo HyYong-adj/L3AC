@@ -112,14 +112,14 @@ class UpTransV1(nn.Module):
 
 
 class UpTransV2(nn.Module):
-    def __init__(self, feature_dim=128, window_size=200, compress_rate=2, depth=2, **kwargs):
+    def __init__(self, feature_dim=128, window_size=200, compress_rate=2, depth=2, causal=False, **kwargs):
         super().__init__()
         assert window_size % compress_rate == 0
         self.feature_dim = feature_dim
         self.compress_rate = compress_rate
-        self.trans = LocalTrans.builder(feature_dim, local_window_size=window_size, depth=depth, **kwargs)
-        self.up_layer = nn.Upsample(scale_factor=self.compress_rate, mode='linear', align_corners=False)
-
+        self.trans = LocalTrans.builder(feature_dim, local_window_size=window_size, depth=depth, causal=causal, **kwargs)
+        self.up_layer = nn.Upsample(scale_factor=self.compress_rate, mode='nearest') if causal else \
+                       nn.Upsample(scale_factor=self.compress_rate, mode='linear', align_corners=False)
     def forward(self, x):
         x = self.up_layer(x.permute(0, 2, 1)).permute(0, 2, 1)
         x = self.trans(x)
@@ -127,13 +127,14 @@ class UpTransV2(nn.Module):
 
 
 class DownTrans(nn.Module):
-    def __init__(self, feature_dim=128, window_size=200, compress_rate=2, depth=2, **kwargs):
+    def __init__(self, feature_dim=128, window_size=200, compress_rate=2, depth=2, causal=False, **kwargs):
         super().__init__()
         assert window_size % compress_rate == 0
         self.feature_dim = feature_dim
         self.compress_rate = compress_rate
         self.trans = LocalTrans.builder(feature_dim, local_window_size=window_size, depth=depth, **kwargs)
-        self.down_layer = Conv1d(feature_dim, feature_dim, kernel_size=compress_rate, stride=compress_rate)
+        self.down_layer = CausalConv1d(feature_dim, feature_dim, kernel_size=compress_rate, stride=compress_rate) if causal \
+            else Conv1d(feature_dim, feature_dim, kernel_size=compress_rate, stride=compress_rate)
 
     def forward(self, x):
         x = self.trans(x)
@@ -143,7 +144,7 @@ class DownTrans(nn.Module):
 
 
 class CompressedLocalEncoderWithCache(nn.Module):
-    def __init__(self, feature_dim=128, local_window_size=200, compress_rate=2, cache_size=3, depth=4, **kwargs):
+    def __init__(self, feature_dim=128, local_window_size=200, compress_rate=2, cache_size=3, depth=4, causal=False, **kwargs):
         super().__init__()
         self.local_window_size = local_window_size
         self.compress_rate = compress_rate
@@ -153,7 +154,7 @@ class CompressedLocalEncoderWithCache(nn.Module):
 
         first_layer_depth = depth // 2
         self.down_trans = DownTrans(feature_dim, window_size=self.trans_window_size * compress_rate,
-                                    compress_rate=compress_rate, depth=first_layer_depth, **kwargs)
+                                    compress_rate=compress_rate, depth=first_layer_depth, causal=causal, **kwargs)
 
         self.local_trans = LocalTrans.builder(
             feature_dim, local_window_size=self.trans_window_size, depth=depth - first_layer_depth, **kwargs)
@@ -166,7 +167,7 @@ class CompressedLocalEncoderWithCache(nn.Module):
 
 
 class CompressedLocalDecoderWithCache(nn.Module):
-    def __init__(self, feature_dim=128, local_window_size=200, compress_rate=2, cache_size=3, depth=4, **kwargs):
+    def __init__(self, feature_dim=128, local_window_size=200, compress_rate=2, cache_size=3, depth=4, causal=False, **kwargs):
         super().__init__()
         self.local_window_size = local_window_size
         self.compress_rate = compress_rate
@@ -174,7 +175,7 @@ class CompressedLocalDecoderWithCache(nn.Module):
         assert cache_size == 0
 
         self.up_trans = UpTransV2(feature_dim=feature_dim, window_size=self.trans_window_size * self.compress_rate,
-                                  compress_rate=self.compress_rate, depth=2, **kwargs)
+                                  compress_rate=self.compress_rate, depth=2, causal=causal, **kwargs)
 
         self.local_trans = LocalTrans.builder(
             feature_dim=feature_dim, local_window_size=self.trans_window_size, depth=depth - 2, **kwargs)
@@ -207,3 +208,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
