@@ -37,12 +37,14 @@ class EnCodec(base_codec.Codec):
                                                               local_window_size=mc.en_coder_window_size,
                                                               cache_size=mc.en_coder_cache_size,
                                                               compress_rate=mc.en_coder_compress_rate,
-                                                              use_dynamic_pos_bias=mc.en_coder_dynamic_pos)
+                                                              use_dynamic_pos_bias=mc.en_coder_dynamic_pos,
+                                                              causal= mc.causal)
             self.en_decoder = CompressedLocalDecoderWithCache(feature_dim=mc.feature_dim, depth=mc.en_coder_depth,
                                                               local_window_size=mc.en_coder_window_size,
                                                               cache_size=mc.en_coder_cache_size,
                                                               compress_rate=mc.en_coder_compress_rate,
-                                                              use_dynamic_pos_bias=mc.en_coder_dynamic_pos)
+                                                              use_dynamic_pos_bias=mc.en_coder_dynamic_pos,
+                                                              causal= mc.causal)
 
     @property
     def trainable_modules(self):
