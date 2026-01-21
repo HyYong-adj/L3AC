@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from l3ac.layers import Conv1d
-from l3ac.modules import Causal_Conv1d
+from l3ac.modules import CausalConv1d
 
 class LocalTrans(nn.Module):
     def __init__(
