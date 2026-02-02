@@ -58,14 +58,13 @@ class ConvUnit(nn.Module):
             self.act = Snake1d(4 * dim, data_format="channels_last")
         else:
             self.act = nn.GELU()
-        if causal:
-            self.grn = CausalGRNEMA(
-                4 * dim,
-                alpha=0.99,
-                data_format="channels_last",
-            )
-        else:
-            self.grn = GRN(4 * dim, data_format="channels_last")
+        # if causal:
+        #     self.grn = CausalGRNRMS(
+        #         4 * dim,
+        #         data_format="channels_last",
+        #     )
+        # else:
+        #     self.grn = GRN(4 * dim, data_format="channels_last")
 
         self.pw_conv2 = Linear(4 * dim, dim)
 
@@ -75,7 +74,7 @@ class ConvUnit(nn.Module):
         x = self.norm(x)
         x = self.pw_conv1(x)
         x = self.act(x)
-        x = self.grn(x)
+        # x = self.grn(x)
         x = self.pw_conv2(x)
         x = x.permute(0, 2, 1)  # (N, T, C) -> (N, C, T)
         return x

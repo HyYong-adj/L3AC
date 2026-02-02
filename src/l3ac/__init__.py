@@ -1,16 +1,15 @@
 import logging
 import math
 from pathlib import Path
-
+from typing import Optional
 import torch
-from pydantic import computed_field, field_validator, ValidationInfo
+from pydantic import ConfigDict, computed_field, field_validator, ValidationInfo
 
 from .en_codec import ModelConfig
 from .en_codec import EnCodec
 from xtract.config import FileConfig
 
-CONFIG_DIR = Path(__file__).parent / "configs"
-
+CONFIG_DIR = Path(__file__).parent.parent / "model" / "exp" / "configs"
 log = logging.getLogger("L3AC")
 
 
@@ -19,9 +18,12 @@ def list_models() -> list[str]:
 
 
 def get_model(config_name):
+    target_path = CONFIG_DIR / f"{config_name}.toml"
+    print(f"DEBUG: Looking for config at: {target_path}")
+    print(f"DEBUG: Does file exist? {target_path.exists()}")
     codec_config = L3ACConfig(config_file=CONFIG_DIR / f"{config_name}.toml")
     l3ac_codec = L3AC(codec_config)
-    l3ac_codec.load_pretrained()
+    # l3ac_codec.load_pretrained()
     return l3ac_codec
 
 
@@ -30,7 +32,13 @@ def get_model_info(model: EnCodec, eval_flops_seconds=10, sample_rate: int = 160
 
     from ptflops import get_model_complexity_info
 
-    with torch.cuda.device(0):
+    # Use CUDA context only if CUDA is available
+    if torch.cuda.is_available():
+        with torch.cuda.device(0):
+            macs, params = get_model_complexity_info(
+                model, input_res=(eval_flops_seconds * sample_rate,),
+                as_strings=True, print_per_layer_stat=False)
+    else:
         macs, params = get_model_complexity_info(
             model, input_res=(eval_flops_seconds * sample_rate,),
             as_strings=True, print_per_layer_stat=False)
@@ -52,15 +60,16 @@ def get_model_info(model: EnCodec, eval_flops_seconds=10, sample_rate: int = 160
 
 
 class L3ACConfig(FileConfig):
+    # model_config = ConfigDict(extra='ignore')
     config_file: Path
 
     model_name: str = "debug"
     sample_rate: int = 16000
     model_version: str = "v0.0"
     model_dir: Path = Path.home() / ".cache" / "l3ac"
-    weight_url: str = None
+    weight_url: Optional[str] = None
 
-    network_config: ModelConfig = None
+    network_config: Optional[ModelConfig] = None
 
     @computed_field
     @property
@@ -106,7 +115,7 @@ class L3AC:
         self.network.load_model(model_path=self.config.model_path)
 
     def encode_audio(self, audio_data: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-        audio_data, audio_length = self.network.preprocess(audio_data)
+        audio_data, audio_length, pad_len = self.network.preprocess(audio_data)
         feature = self.network.encoder(audio_data.unsqueeze(1))
         trans_feature = self.network.en_encoder(feature)
 

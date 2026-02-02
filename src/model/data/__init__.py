@@ -6,13 +6,13 @@ import numpy
 from pydantic import BaseModel, Field, field_validator, ValidationError, ValidationInfo
 import torch.utils.data
 
-from utils.file import PROJECT_PATH
+from utils.file import PROJECT_PATH, DATA_PATH
 from xtract.data import XDataset, x_dataset
 
 from prepare.data_process import DN
 from .format import DataCollector
 
-DEFAULT_DATASET_DIR = (PROJECT_PATH / 'data/dataset')
+DEFAULT_DATASET_DIR = (DATA_PATH)
 
 
 class DataLoaderBuilder(BaseModel):

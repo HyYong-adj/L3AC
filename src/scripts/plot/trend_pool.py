@@ -2,6 +2,8 @@ import math
 
 import librosa
 import matplotlib.pyplot as plt
+matplotlib.use('Agg')
+
 import numpy
 import torch
 from matplotlib.ticker import FormatStrFormatter
