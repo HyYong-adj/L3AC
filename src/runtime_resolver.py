@@ -98,7 +98,9 @@ class Settings(BaseSettings):
 
     @cached_property
     def log_path(self) -> Path:
-        return self.output_dir / f"log/{self.runtime_name}.{self.version}"
+        # resume할 때는 원본 version으로 로그 폴더 생성
+        version_for_log = self.version.removeprefix("resume_") if self.version.startswith("resume") else self.version
+        return self.output_dir / f"log/{self.runtime_name}.{version_for_log}"
 
     @cached_property
     def tlog(self) -> xtract.tensor_log.Writer:
@@ -111,7 +113,7 @@ class Settings(BaseSettings):
         xtract.nn.EPS = xtract.nn.get_eps(self.data_precision)
         xtract.tensor_log.init_tensor_rich_repr()
         if self.log_record:
-            self.log_path.mkdir(exist_ok=False)
+            self.log_path.mkdir(exist_ok=True)
             utils.log.LOG_FILE = self.log_path / 'log.txt'
             if self.source_release:
                 utils.log.release_source(self.log_path, SOURCE_PATH)

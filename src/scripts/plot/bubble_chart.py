@@ -1,7 +1,7 @@
 import math
 
 import matplotlib.pyplot as plt
-
+matplotlib.use('Agg')
 from scripts.plot import PLOT_DIR
 
 # plt.rcParams['font.family'] = 'Arial'

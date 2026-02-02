@@ -133,7 +133,8 @@ def temp():
     import numpy as np
     from scipy.stats import irwinhall
     import matplotlib.pyplot as plt
-
+    matplotlib.use('Agg')
+    
     n = 500  # Number of uniform random variables
     bates_dist = irwinhall(n, scale=1 / n)
 

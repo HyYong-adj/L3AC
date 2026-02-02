@@ -11,7 +11,7 @@ from scipy.io import loadmat, savemat
 
 SOURCE_PATH = pathlib.Path(__file__).parents[1]
 PROJECT_PATH = SOURCE_PATH.parent
-DATA_PATH = PROJECT_PATH / "data"
+DATA_PATH = pathlib.Path("/data3/MTG-Jamendo_preprocess/mtg-l3ac")
 
 
 def load_as_txt(file):
