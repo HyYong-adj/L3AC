@@ -1,0 +1,28 @@
+# 로그 파일
+nohup*.log
+*.log
+output.log
+
+# 모델 및 체크포인트
+*.pt
+*.safetensors
+tiny.en.pt
+output/best_model*/
+
+# 출력 디렉토리
+output/
+output/wandb/
+output/log/
+
+# 캐시 및 빌드 관련
+**/__pycache__/
+*.pyc
+*.pyo
+
+# 데이터 및 결과
+data/
+etc/plots/raw_data/
+
+# IDE 및 시스템 파일
+.DS_Store
+.vscode/
