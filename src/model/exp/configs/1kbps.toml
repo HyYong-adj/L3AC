@@ -1,5 +1,6 @@
 sample_rate = 16000
 
+
 train_epoch_num = 70
 target_batch_size = 24  # !
 train_dis_every_n_batches = 22  # edit
@@ -9,29 +10,36 @@ dis_grad_max_norm = 10
 
 [train_data]
 dataset_paths = [
-    "libri_speech_FLAC/train",
-    "common_voice_24k/train",
-    "mtg_low/train",
-    "FSD50K_44k/train",
+    "mtg/train",
+    "musdb/train",
 ]
 data_normalize = true
-max_seconds = 6.8  # edit
+max_seconds = 7.2  # edit
 batch_size = 4
-sample_num = 90_000
+sample_num = [85_000, 1000]
 
 [eval_data]
 dataset_paths = [
-    'common_voice_24k/eval',
+    'mtg/eval',
+    "musdb/eval"
 ]
 data_normalize = true
 max_seconds = 15
 batch_size = 8
 sample_num = 320
 
+[[eval_data_extra]]
+name = "evaluating_musdb"
+dataset_paths = ["musdb/eval"]
+data_normalize = true
+max_seconds = 15
+batch_size = 8
+sample_num = 160
+
 [test_data]
 dataset_paths = [
-    'libri_speech_FLAC/test',
-    'common_voice_24k/test',
+    'mtg/test',
+    "musdb/test"
 ]
 data_normalize = false
 max_seconds = 60
@@ -56,6 +64,7 @@ en_coder_window_size = 250  # edit
 en_coder_dynamic_pos = true
 en_coder_compress_rate = 3  # edit
 en_coder_cache_size = 0
+causal = true
 
 [dis_nn_config]
 fft_size = [126, 542, 1418, 2296]
