@@ -1,85 +1,28 @@
-# =========================
-# Data (DO NOT COMMIT)
-# =========================
-dataset/
-data/
-datasets/
-**/*.mp3
-**/*.wav
-**/*.flac
-**/*.ogg
-**/*.m4a
-**/*.h5
-**/*.hdf5
-**/*.tar
-**/*.tar.gz
-**/*.zip
+# 로그 파일
+nohup*.log
+*.log
+output.log
 
-# If you have absolute-path symlinks or mounts recorded somewhere
-**/mtg-jamendo-dataset/
-**/jamendo*/
-
-# =========================
-# Training artifacts
-# =========================
-checkpoints/
-ckpt/
-runs/
-outputs/
-logs/
-wandb/
-lightning_logs/
-tensorboard/
-mlruns/
-
-# =========================
-# Caches / temp
-# =========================
-__pycache__/
-**/__pycache__/
-*.py[cod]
-*.so
-*.egg-info/
-.cache/
-pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# =========================
-# Env / secrets
-# =========================
-.env
-.env.*
-*.key
-*.pem
-*.pth
+# 모델 및 체크포인트
 *.pt
-*.bin
+*.safetensors
+tiny.en.pt
+output/best_model*/
 
-# =========================
-# OS / editors
-# =========================
+# 출력 디렉토리
+output/
+output/wandb/
+output/log/
+
+# 캐시 및 빌드 관련
+**/__pycache__/
+*.pyc
+*.pyo
+
+# 데이터 및 결과
+data/
+etc/plots/raw_data/
+
+# IDE 및 시스템 파일
 .DS_Store
-Thumbs.db
 .vscode/
-.idea/
-
-# Extra: run logs / tensorboard
-*.log
-**/*.log
-**/events.out.tfevents.*
-env.log
-runtime.env
-runtime_gpu.env
-*.log
-output/
-etc/plots/raw_data/
-
-# Local env / runtime logs (do not commit)
-env.log
-runtime.env
-runtime_gpu.env
-*.log
-output/
-wandb/
-etc/plots/raw_data/

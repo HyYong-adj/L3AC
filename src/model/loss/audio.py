@@ -89,12 +89,49 @@ class DenseMel(MelLoss):
 
 
 class PerceptualLoss(nn.Module):
-    def __init__(self, sample_rate, weight_path='s2t/whisper/tiny.en.pt'):
+    def __init__(self, sample_rate, weight_path='s2t/whisper/tiny.en.pt', backend='mert', mert_model_id: str | None = None, mert_use_layer_weights: bool = True):
         super().__init__()
-        from tools.loss.asr import PerceptualLoss as WhisperLoss
+        """Wrapper that selects which perceptual loss backend to use.
+
+        backend: 'mert' or 'whisper'
+        - If 'mert' the `mert_model_id` (HF model id or local path) is passed to the
+          MERT loader; if not provided it falls back to `weight_path` for a local
+          checkpoint when available. `mert_use_layer_weights` controls whether a
+          learnable weighted-average across MERT layers is used.
+        - If 'whisper' the `weight_path` is used as before.
+
+        Default: 'mert' to use the new MERT-based perceptual loss while keeping
+        Whisper-based loss available for fallback and compatibility.
+        """
         if not pathlib.Path(weight_path).is_absolute():
             weight_path = utils.file.DATA_PATH / 'model' / weight_path
-        self.loss_model = WhisperLoss(model_path=weight_path, sample_rate=sample_rate)
+
+        if backend.lower() == 'whisper':
+            from tools.loss.asr import PerceptualLoss as WhisperLoss
+            self.loss_model = WhisperLoss(model_path=weight_path, sample_rate=sample_rate)
+        else:
+            try:
+                from tools.loss.mert import MertPerceptualLoss as MertLoss
+                # Treat empty string or 'None' from configs as disabling HF MERT
+                if isinstance(mert_model_id, str) and mert_model_id.strip().lower() in ("", "none"):
+                    model_id_or_path = "m-a-p/MERT-v1-95M"
+                elif mert_model_id is None:
+                    model_id_or_path = "m-a-p/MERT-v1-95M"
+                else:
+                    model_id_or_path = mert_model_id
+                log = utils.log.get_logger()
+                log.info(f"PerceptualLoss backend=mert, model_path={model_id_or_path}")
+                self.loss_model = MertLoss(
+                    model_id_or_path=model_id_or_path,
+                    input_sample_rate=sample_rate,
+                    use_layer_weights=mert_use_layer_weights,
+                    layer_subset=(-6, -5, -4, -3, -2, -1),
+                )
+            except Exception as e:
+                from tools.loss.asr import PerceptualLoss as WhisperLoss
+                self.loss_model = WhisperLoss(model_path=weight_path, sample_rate=sample_rate)
+                log = utils.log.get_logger()
+                log.warning(f"MertPerceptualLoss import failed ({e}), falling back to Whisper-based perceptual loss")
 
     @utils.args.AutoSigner()
     def forward(self, generated_audio, audio):

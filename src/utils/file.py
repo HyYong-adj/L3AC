@@ -11,7 +11,9 @@ from scipy.io import loadmat, savemat
 
 SOURCE_PATH = pathlib.Path(__file__).parents[1]
 PROJECT_PATH = SOURCE_PATH.parent
-DATA_PATH = pathlib.Path("/data3/MTG-Jamendo_preprocess/mtg-l3ac")
+# Default DATA_PATH: use project-local 'data/dataset' so relative dataset paths (e.g., 'mtg/train')
+# resolve inside the project. Previously this pointed to an external location (/data3/...).
+DATA_PATH = (PROJECT_PATH / 'data' / 'dataset').resolve()
 
 
 def load_as_txt(file):

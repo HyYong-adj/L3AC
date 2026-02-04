@@ -8,7 +8,7 @@ from .base import LossWrapper, NetworkLoss
 from .audio import ElementWise, MultiStft, MultiMel, PerceptualLoss
 
 
-def loss_builder(name: str, sample_rate: int, asr_weight_path) -> torch.nn.Module:
+def loss_builder(name: str, sample_rate: int, asr_weight_path, perception_backend: str = 'mert', mert_model_id: str | None = None, mert_use_layer_weights: bool = True) -> torch.nn.Module:
     match name.lower():
         case 'nll_loss':
             loss_nn = LossWrapper(F.nll_loss)
@@ -21,7 +21,7 @@ def loss_builder(name: str, sample_rate: int, asr_weight_path) -> torch.nn.Modul
         case 'multi_mel':
             loss_nn = MultiMel(sample_rate=sample_rate)
         case 'perception':
-            loss_nn = PerceptualLoss(sample_rate=sample_rate, weight_path=asr_weight_path)
+            loss_nn = PerceptualLoss(sample_rate=sample_rate, weight_path=asr_weight_path, backend=perception_backend, mert_model_id=mert_model_id, mert_use_layer_weights=mert_use_layer_weights)
         case loss_name if loss_name.startswith('network_'):
             loss_nn = NetworkLoss(loss_name.removeprefix('network_'))
         case _:
@@ -31,12 +31,15 @@ def loss_builder(name: str, sample_rate: int, asr_weight_path) -> torch.nn.Modul
 
 
 class Losses(torch.nn.Module):
-    def __init__(self, sample_rate: int, asr_weight_path, loss_weights: dict):
+    def __init__(self, sample_rate: int, asr_weight_path, loss_weights: dict, perception_backend: str = 'mert', mert_model_id: str | None = None, mert_use_layer_weights: bool = True):
         super().__init__()
         self.loss_nns = torch.nn.ModuleDict()
         self.loss_weights = {}
+        self.perception_backend = perception_backend
+        self.mert_model_id = mert_model_id
+        self.mert_use_layer_weights = mert_use_layer_weights
         for loss_name, loss_weight in loss_weights.items():
-            self.loss_nns[loss_name] = loss_builder(loss_name, sample_rate=sample_rate, asr_weight_path=asr_weight_path)
+            self.loss_nns[loss_name] = loss_builder(loss_name, sample_rate=sample_rate, asr_weight_path=asr_weight_path, perception_backend=self.perception_backend, mert_model_id=self.mert_model_id, mert_use_layer_weights=self.mert_use_layer_weights)
             self.loss_weights[loss_name] = tools.loss.weight.builder(loss_weight)
 
     def forward(self, nn_output, ref_input) -> (torch.Tensor, dict[str, torch.Tensor]):

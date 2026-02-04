@@ -24,7 +24,10 @@ class Discriminator(xnn.Module):
         raise ValueError(f"Please specific the loss type")
 
     def discriminator_loss(self, fake, real):
-        d_fake = self.dis_nn(fake.clone().detach())
+        # Compute fake outputs without tracking autograd to avoid registering hooks
+        # on discriminator parameters that could cause duplicate ready marking.
+        with torch.no_grad():
+            d_fake = self.dis_nn(fake.clone().detach())
         d_real = self.dis_nn(real)
 
         loss_d = 0
@@ -37,7 +40,9 @@ class Discriminator(xnn.Module):
 
     def generator_loss(self, fake, real):
         d_fake = self.dis_nn(fake)
-        d_real = self.dis_nn(real)
+        # Real outputs are only used as targets (detached), so compute them without grad
+        with torch.no_grad():
+            d_real = self.dis_nn(real)
 
         loss_g = 0
         for x_fake in d_fake:

@@ -2,7 +2,7 @@ sample_rate = 16000
 
 
 train_epoch_num = 70
-target_batch_size = 24  # !
+target_batch_size = 40  # !
 train_dis_every_n_batches = 15  # edit
 
 grad_max_norm = 1e4
@@ -11,24 +11,35 @@ dis_grad_max_norm = 10
 [train_data]
 dataset_paths = [
     "mtg/train",
+    "musdb/train",
 ]
 data_normalize = true
 max_seconds = 7.2  # edit
-batch_size = 4
-sample_num = 90_000
+batch_size = 10
+sample_num = [85_000, 1000]
 
 [eval_data]
 dataset_paths = [
     'mtg/eval',
+    "musdb/eval"
 ]
 data_normalize = true
 max_seconds = 15
 batch_size = 8
 sample_num = 320
 
+[[eval_data_extra]]
+name = "evaluating_musdb"
+dataset_paths = ["musdb/eval"]
+data_normalize = true
+max_seconds = 15
+batch_size = 8
+sample_num = 160
+
 [test_data]
 dataset_paths = [
     'mtg/test',
+    "musdb/test"
 ]
 data_normalize = false
 max_seconds = 60
@@ -74,6 +85,8 @@ weight_decay = 1e-5
 
 [loss_config]
 asr_weight_path='s2t/whisper/tiny.en.pt'
+perception_backend='mert'
+mert_model_id='m-a-p/MERT-v1-95M'
 
 [loss_config.loss_weights]
 element_wise = 100
@@ -82,4 +95,8 @@ perception = "clamp-max-5"
 network_gen_loss = 'clamp-max-10'
 
 [metric_config]
-metric_names = ["stoi", "pesq", "codebook_usage"]
+metric_names = ["mert", "stoi", "pesq", "codebook_usage"]
+mert_model_id = "m-a-p/MERT-v1-95M"
+mert_use_layer_weights = true
+mert_layer_subset = [-6, -5, -4, -3, -2, -1]
+mert_device = "auto"

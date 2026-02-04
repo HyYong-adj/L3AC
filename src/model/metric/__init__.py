@@ -1,12 +1,24 @@
+import torch
 import xtract
 from .base import BaseMetric
 from .classify import Accuracy
-from .audio import STOI, PESQ
+from .audio import STOI, PESQ, MERT
 from .vq import CodebookUsage
 from ..network import Network
 
 
-def metric_builder(name: str, network: Network, sample_rate: int, cpu_num: int, cuda_device: int) -> BaseMetric:
+def metric_builder(
+    name: str,
+    network: Network,
+    sample_rate: int,
+    cpu_num: int,
+    cuda_device: int,
+    mert_model_id: str | None = None,
+    mert_use_layer_weights: bool = True,
+    mert_layer_subset: tuple[int, ...] | None = (-6, -5, -4, -3, -2, -1),
+    mert_device: str | None = "auto",
+    mert_amp_dtype: str | None = None,
+) -> BaseMetric:
     match name.lower():
         case 'accuracy':
             metric = Accuracy()
@@ -14,6 +26,18 @@ def metric_builder(name: str, network: Network, sample_rate: int, cpu_num: int, 
             metric = STOI(input_sample_rate=sample_rate)
         case 'pesq':
             metric = PESQ(input_sample_rate=sample_rate, cpu_num=cpu_num)
+        case 'mert':
+            amp_dtype = None
+            if isinstance(mert_amp_dtype, str) and mert_amp_dtype.strip():
+                amp_dtype = getattr(torch, mert_amp_dtype, None)
+            metric = MERT(
+                input_sample_rate=sample_rate,
+                model_id_or_path=mert_model_id or "m-a-p/MERT-v1-95M",
+                use_layer_weights=mert_use_layer_weights,
+                layer_subset=mert_layer_subset,
+                device=mert_device,
+                amp_dtype=amp_dtype,
+            )
         case 'codebook_usage':
             metric = CodebookUsage(network.quantizer.vq.codebook_size, cuda_device=cuda_device)
         case _:

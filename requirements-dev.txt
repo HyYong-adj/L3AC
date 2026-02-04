@@ -1,0 +1,32 @@
+# Development extras and optional packages for MERT / HF models
+# Note: torch/torchaudio should be installed from the official PyTorch wheels
+# matching your CUDA version (see README for the wheel command).
+
+transformers
+datasets
+accelerate
+einops
+pynvml
+tensorboard
+pydantic-settings
+lz4
+bidict
+scipy
+seaborn
+rich
+
+# audio tooling
+soundfile
+librosa
+openai-whisper
+pesq
+pystoi
+jiwer
+ptflops
+local-attention
+
+# project specific / git installs
+# audiotools pinned from the branch used in README
+git+https://github.com/carlthome/audiotools.git@upgrade-dependencies
+# descript audio codec (project dependency)
+descript-audio-codec

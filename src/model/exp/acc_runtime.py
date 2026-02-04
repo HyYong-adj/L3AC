@@ -42,9 +42,11 @@ set_available_gpus(RS.cuda_devices)
 
 RS = accelerate.utils.broadcast_object_list([RS, ], from_process=0)[0]
 
+
 ACC = accelerate.Accelerator(
     mixed_precision=get_acc_precision(RS.data_precision),
     step_scheduler_with_optimizer=False,
+    
 )
 
 if ACC.is_main_process:

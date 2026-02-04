@@ -16,6 +16,7 @@ DEFAULT_DATASET_DIR = (DATA_PATH)
 
 
 class DataLoaderBuilder(BaseModel):
+    name: str | None = None
     dataset_paths: list[Path]
 
     sample_rate: int = 16000

@@ -161,13 +161,23 @@ def train():
     # ✅ ONLY_EVAL=1 이면 eval만 1번 돌리고 종료
     if os.environ.get("ONLY_EVAL", "").lower() in {"1", "true", "yes"}:
         metric_results = model.evaluate(model.eval_loader, "evaluating")
+        extra_eval_results = {}
+        for name, loader in model.eval_loaders.items():
+            if name == "evaluating":
+                continue
+            extra_eval_results[name] = model.evaluate(loader, name)
         if ACC.is_main_process:
             log.info(f"[ONLY_EVAL] score: {metric_results}")
+            if extra_eval_results:
+                log.info(f"[ONLY_EVAL] extra eval scores: {extra_eval_results}")
             if wandb.run is not None:
                 if isinstance(metric_results, dict):
                     log_dict = {f"eval/{k}": v for k, v in metric_results.items()}
                 else:
                     log_dict = {"eval/score": metric_results}
+                for name, results in extra_eval_results.items():
+                    if isinstance(results, dict):
+                        log_dict.update({f"{name}/{k}": v for k, v in results.items()})
                 log.info(f"Logging ONLY_EVAL metrics to wandb: {log_dict}")
                 wandb.log(log_dict)
                 wandb.finish()
@@ -187,14 +197,14 @@ def train():
         """Pick a scalar score from nested metric_results.
 
         Priority (higher is better):
-        1) STOI.STOI
-        2) PESQ.PESQ
-        3) CodebookUsage.usage_probs
+        1) PESQ.PESQ (reconstruction quality)
+        2) MERT.MERT (perceptual quality)
+        3) CodebookUsage.usage_probs (token modeling friendliness)
         Fallback: first numeric value found.
         """
         priority = [
-            ("STOI", "STOI", "max"),
             ("PESQ", "PESQ", "max"),
+            ("MERT", "MERT", "max"),
             ("CodebookUsage", "usage_probs", "max"),
         ]
 
@@ -240,10 +250,17 @@ def train():
             model.train_epoch_without_discriminator()
 
         metric_results = model.evaluate(model.eval_loader, "evaluating")
+        extra_eval_results = {}
+        for name, loader in model.eval_loaders.items():
+            if name == "evaluating":
+                continue
+            extra_eval_results[name] = model.evaluate(loader, name)
         ACC.save_state(RS.log_path / 'state_cache')
 
         if ACC.is_main_process:
             log.info(f"Eval epoch({epoch}) score: {metric_results}")
+            if extra_eval_results:
+                log.info(f"Eval epoch({epoch}) extra scores: {extra_eval_results}")
 
             current_score, mode, score_label = _select_eval_score(metric_results)
 
@@ -283,6 +300,9 @@ def train():
                     log_dict = {f"eval/{k}": v for k, v in metric_results.items()}
                 else:
                     log_dict = {"eval/score": metric_results}
+                for name, results in extra_eval_results.items():
+                    if isinstance(results, dict):
+                        log_dict.update({f"{name}/{k}": v for k, v in results.items()})
                 log_dict["epoch"] = epoch
                 log.info(f">>> Logging metrics: {log_dict}")
                 wandb.log(log_dict)

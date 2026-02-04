@@ -38,6 +38,7 @@ class Config(FileConfig):
 
     train_data: DataLoaderBuilder
     eval_data: DataLoaderBuilder
+    eval_data_extra: list[DataLoaderBuilder] = Field(default_factory=list)
     test_data: DataLoaderBuilder
 
     nn_config: NetworkConfig
@@ -63,6 +64,19 @@ class Config(FileConfig):
             sample_rate=info.data['sample_rate'],
             num_workers=RS.cpu_num,
         )
+
+    @field_validator('eval_data_extra', mode='before')
+    @classmethod
+    def complete_eval_data_extra_config(cls, data_list: list[dict] | None, info: ValidationInfo):
+        if not data_list:
+            return []
+        return [
+            data_config | dict(
+                sample_rate=info.data['sample_rate'],
+                num_workers=RS.cpu_num,
+            )
+            for data_config in data_list
+        ]
 
     @field_validator('opt_config', mode='before')
     @classmethod
@@ -99,6 +113,10 @@ class Model:
 
         self.train_loader = ACC.prepare(config.train_data.get_dataloader(prefetch_size=self.mc.target_batch_size))
         self.eval_loader = ACC.prepare(config.eval_data.get_dataloader())
+        self.eval_loaders = {"evaluating": self.eval_loader}
+        for idx, extra_eval in enumerate(config.eval_data_extra):
+            name = extra_eval.name or f"evaluating_extra_{idx}"
+            self.eval_loaders[name] = ACC.prepare(extra_eval.get_dataloader())
         self.test_loader = ACC.prepare(config.test_data.get_dataloader())
 
         network = Network(config.nn_config)
@@ -114,6 +132,21 @@ class Model:
         )
 
         self.loss_nn = ACC.prepare(Losses(**config.loss_config))
+        # ===== DEBUG PRINT (DDP / loss_nn 확인) =====
+        if ACC.is_main_process:
+            log.info("===== loss_nn DEBUG =====")
+            log.info(f"type(loss_nn): {type(self.loss_nn)}")
+            log.info(f"hasattr(no_sync): {hasattr(self.loss_nn, 'no_sync')}")
+            log.info(f"#params(loss_nn): {sum(p.numel() for p in self.loss_nn.parameters())}")
+            log.info(f"any trainable param: {any(p.requires_grad for p in self.loss_nn.parameters())}")
+            log.info("=========================")
+        if ACC.is_main_process:
+            log.info("===== MODEL WRAPPER CHECK =====")
+            log.info(f"type(network): {type(self.network)}")
+            log.info(f"type(dis_nn): {type(self.dis_nn)}")
+            log.info(f"network has no_sync: {hasattr(self.network, 'no_sync')}")
+            log.info(f"dis_nn has no_sync: {hasattr(self.dis_nn, 'no_sync')}")
+            log.info("================================")
 
         self.metric = Metrics(network, **config.metric_config)
 
@@ -133,18 +166,20 @@ class Model:
                                      flag_frequency=self.mc.steps_per_epoch_num,
                                      desc="training")
 
+    
     @contextlib.contextmanager
-    def grad_sync_context(self, grad_sync=True):
+    def grad_sync_context(self, modules, grad_sync: bool):
+        """
+        grad_sync=True  -> sync(allreduce)
+        grad_sync=False -> no_sync accumulation (DDP allreduce delay)
+        """
         if grad_sync:
-            context = contextlib.nullcontext()
-        else:
-            context = utils.context.nested_context(
-                lambda: ACC.no_sync(self.network),
-                lambda: ACC.no_sync(self.dis_nn),
-                lambda: ACC.no_sync(self.loss_nn),  # !
-            )
-        with context:
             yield
+        else:
+            # modules-> no_sync
+            ctxs = [lambda m=m: ACC.no_sync(m) for m in modules]
+            with utils.context.nested_context(*ctxs):
+                yield
 
     @staticmethod
     def step_scheduler(scheduler: torch.optim.lr_scheduler.LRScheduler) -> float:
@@ -163,10 +198,11 @@ class Model:
         if do_wandb and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
 
-        wandb_metrics = {}  # 한 번에 모아서 로깅할 dict
+        wandb_metrics = {}  # loging dict
 
         for cd, (batch_input, step_flag) in utils.iter.cd_enumerate(accumulated_batch):
-            with self.grad_sync_context(cd == 0):
+            is_last = (cd == len(accumulated_batch) - 1)
+            with self.grad_sync_context([self.dis_nn], grad_sync=is_last):
                 with torch.no_grad():
                     nn_output = self.network(batch_input['audio'])
 
@@ -178,7 +214,6 @@ class Model:
                 log.info(f"Discriminator loss dict: {loss_dict}")
                 ACC.backward(weighted_sum / accumulate_num)
                 param_norm = ACC.clip_grad_norm_(self.dis_nn.parameters(), self.mc.dis_grad_max_norm)
-
                 if step_flag:
                     step_flags.append(step_flag)
 
@@ -221,11 +256,13 @@ class Model:
         if do_wandb and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
 
-        wandb_metrics = {}  # 한 번에 모아서 로깅할 dict
-
+        wandb_metrics = {}  # loging dict
+        sync_modules = [self.network, self.loss_nn]
         with xnn.without_autograd(self.dis_nn):  # !
             for cd, (batch_input, step_flag) in utils.iter.cd_enumerate(accumulated_batch):
-                with self.grad_sync_context(cd == 0):
+                is_last = (cd == len(accumulated_batch) - 1)
+
+                with self.grad_sync_context(sync_modules, grad_sync=is_last):
                     nn_output = self.network(batch_input['audio'])
                     gen_weighted_sum, gen_loss_dict = self.dis_nn(
                         fake=nn_output['generated_audio'],
@@ -237,7 +274,6 @@ class Model:
 
                     ACC.backward(weighted_sum / accumulate_num)
                     param_norm = ACC.clip_grad_norm_(self.network.parameters(), self.mc.grad_max_norm)
-
                     if step_flag:
                         step_flags.append(step_flag)
 
@@ -326,4 +362,3 @@ class Model:
 
         self.dis_nn.forward = orig_dis_nn_forward
         return recorder.get_results()
-

@@ -32,7 +32,7 @@ class Module(torch.nn.Module):
 
     def save_model(self, model_dir=None, model_path=None):
         model_path = model_path or pathlib.Path(model_dir).joinpath(self.name)
-        model_path.mkdir(exist_ok=True)
+        model_path.mkdir(parents=True, exist_ok=True)
         log.info(f"Saving model to {model_path}")
         for name, module in self.trainable_modules.items():
             torch.save(module.state_dict(), model_path / f"{name}.pt")
