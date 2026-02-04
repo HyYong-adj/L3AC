@@ -197,13 +197,15 @@ def train():
         """Pick a scalar score from nested metric_results.
 
         Priority (higher is better):
-        1) PESQ.PESQ (reconstruction quality)
-        2) MERT.MERT (perceptual quality)
-        3) CodebookUsage.usage_probs (token modeling friendliness)
+        1) MultiResSTFT.MultiResSTFT (reconstruction quality, lower is better)
+        2) LogMelL1.LogMelL1 (reconstruction quality, lower is better)
+        3) MERT.MERT (perceptual quality)
+        4) CodebookUsage.usage_probs (token modeling friendliness)
         Fallback: first numeric value found.
         """
         priority = [
-            ("PESQ", "PESQ", "max"),
+            ("MultiResSTFT", "MultiResSTFT", "min"),
+            ("LogMelL1", "LogMelL1", "min"),
             ("MERT", "MERT", "max"),
             ("CodebookUsage", "usage_probs", "max"),
         ]

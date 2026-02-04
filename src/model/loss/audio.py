@@ -63,7 +63,7 @@ class MelLoss(StftLoss):
 class MultiStft(nn.Module):
     def __init__(self):
         super().__init__()
-        self.losses = nn.ModuleList([StftLoss(2 ** i) for i in range(5, 11)])
+        self.losses = nn.ModuleList([StftLoss(2 ** i) for i in range(5, 11)])  #music -> remove n_fft=32,64,128 
 
     @utils.args.AutoSigner()
     def forward(self, generated_audio, audio):

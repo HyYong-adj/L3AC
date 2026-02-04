@@ -2,7 +2,7 @@ import torch
 import xtract
 from .base import BaseMetric
 from .classify import Accuracy
-from .audio import STOI, PESQ, MERT
+from .audio import STOI, PESQ, MERT, MultiResSTFT, LogMelL1
 from .vq import CodebookUsage
 from ..network import Network
 
@@ -18,6 +18,10 @@ def metric_builder(
     mert_layer_subset: tuple[int, ...] | None = (-6, -5, -4, -3, -2, -1),
     mert_device: str | None = "auto",
     mert_amp_dtype: str | None = None,
+    log_mel_n_fft: int = 1024,
+    log_mel_n_mels: int = 128,
+    log_mel_hop_length: int | None = None,
+    log_mel_eps: float = xtract.nn.EPS,
 ) -> BaseMetric:
     match name.lower():
         case 'accuracy':
@@ -37,6 +41,16 @@ def metric_builder(
                 layer_subset=mert_layer_subset,
                 device=mert_device,
                 amp_dtype=amp_dtype,
+            )
+        case 'multi_res_stft':
+            metric = MultiResSTFT()
+        case 'log_mel_l1':
+            metric = LogMelL1(
+                input_sample_rate=sample_rate,
+                n_fft=log_mel_n_fft,
+                n_mels=log_mel_n_mels,
+                hop_length=log_mel_hop_length,
+                eps=log_mel_eps,
             )
         case 'codebook_usage':
             metric = CodebookUsage(network.quantizer.vq.codebook_size, cuda_device=cuda_device)
