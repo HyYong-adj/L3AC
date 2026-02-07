@@ -21,7 +21,6 @@ sample_num = [85_000, 1000]
 [eval_data]
 dataset_paths = [
     'mtg/eval',
-    "musdb/eval"
 ]
 data_normalize = true
 max_seconds = 15

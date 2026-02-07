@@ -43,6 +43,8 @@ class StftLoss(nn.Module):
 
     @utils.args.AutoSigner()
     def forward(self, generated_audio, audio):
+        # Ensure STFT window lives on the same device as inputs (eval metrics run on GPU).
+        self.spec_func = self.spec_func.to(generated_audio.device)
         generated_audio_s = self.spec_func(generated_audio)
         audio_s = self.spec_func(audio)
         dd = F.l1_loss(generated_audio_s, audio_s)
