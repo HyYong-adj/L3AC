@@ -20,7 +20,7 @@ output/log/
 *.pyo
 
 # 데이터 및 결과
-data/
+/data/
 etc/plots/raw_data/
 
 # IDE 및 시스템 파일
