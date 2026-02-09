@@ -1,0 +1,102 @@
+sample_rate = 16000
+
+
+train_epoch_num = 70
+target_batch_size = 40  # !
+train_dis_every_n_batches = 15  # edit
+
+grad_max_norm = 1e4
+dis_grad_max_norm = 10
+
+[train_data]
+dataset_paths = [
+    "/data3/MTG-Jamendo_preprocess/mtg-l3ac/train",
+    "/workspace/codec/data/train",
+]
+data_normalize = true
+max_seconds = 7.2  # edit
+batch_size = 5
+sample_num = [85_000, 1000]
+
+[eval_data]
+dataset_paths = [
+    '/data3/MTG-Jamendo_preprocess/mtg-l3ac/eval',
+]
+data_normalize = true
+max_seconds = 15
+batch_size = 8
+sample_num = 320
+
+[[eval_data_extra]]
+name = "evaluating_musdb"
+dataset_paths = ["/workspace/codec/data/eval"]
+data_normalize = true
+max_seconds = 15
+batch_size = 8
+sample_num = 160
+
+[test_data]
+dataset_paths = [
+    '/data3/MTG-Jamendo_preprocess/mtg-l3ac/test',
+    "/workspace/codec/data/test"
+]
+data_normalize = false
+max_seconds = 60
+batch_size = 1
+#sample_num = 'None'
+
+[nn_config]
+feature_dim = 128
+compress_rates = [6, 5, 3]  # edit
+encoder_dims = [24, 48, 96, 192]  # edit
+encoder_depths = [1, 1, 1, 2]  # edit
+decode_rates = [5, 3, 3, 2]  # edit
+decoder_dims = [512, 256, 96, 48, 24]  # edit
+decoder_depths = [3, 3, 2, 1, 1]  # edit
+base_unit = 'normal'
+use_norm = true
+use_snake_act = true
+decoder_last_layer = 'legacy'
+vq_config = { name = "super_fsq", levels = [7, 7, 7, 7, 7, 7], noise_rate = 0.5 }  # edit
+en_coder_depth = 5  # edit
+en_coder_window_size = 300  # edit
+en_coder_dynamic_pos = true
+en_coder_compress_rate = 2  # edit
+en_coder_cache_size = 0
+causal = true
+
+[dis_nn_config]
+fft_size = [126, 542, 1418, 2296]
+
+[opt_config]
+lr = 5e-5
+optimizer_name = "Adam"
+scheduler_name = "OneCycleLR"
+[opt_config.scheduler_args]
+max_lr = 5e-4
+min_lr = 5e-6
+
+[dis_opt_config]
+lr = 5e-5
+optimizer_name = "AdamW"
+[dis_opt_config.optimizer_args]
+weight_decay = 1e-5
+
+[loss_config]
+asr_weight_path='s2t/whisper/tiny.en.pt'
+perception_backend='mert'
+mert_model_id='m-a-p/MERT-v1-95M'
+mert_use_layer_weights = true
+
+[loss_config.loss_weights]
+element_wise = 100
+multi_stft = 1
+perception = "clamp-max-5"
+network_gen_loss = 'clamp-max-10'
+
+[metric_config]
+metric_names = ["mert", "codebook_usage", "multi_res_stft", "log_mel_l1"]
+mert_model_id = "m-a-p/MERT-v1-95M"
+mert_use_layer_weights = true
+mert_layer_subset = [-6, -5, -4, -3, -2, -1]
+mert_device = "auto"
