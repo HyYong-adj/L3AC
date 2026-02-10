@@ -48,9 +48,9 @@ class LocalTrans(nn.Module):
         return x
 
     @classmethod
-    def builder(cls, feature_dim=128, depth=2, local_window_size=200, use_dynamic_pos_bias=False):
+    def builder(cls, feature_dim=128, depth=2, local_window_size=200, use_dynamic_pos_bias=False, causal=True):
         return cls(dim=feature_dim, depth=depth, dim_head=feature_dim // 4, heads=6, ff_mult=4,
-                   causal=True, local_attn_window_size=local_window_size, use_dynamic_pos_bias=use_dynamic_pos_bias, )
+                   causal=causal, local_attn_window_size=local_window_size, use_dynamic_pos_bias=use_dynamic_pos_bias, )
 
 
 class LocalEncoder(nn.Module):
@@ -132,7 +132,7 @@ class DownTrans(nn.Module):
         assert window_size % compress_rate == 0
         self.feature_dim = feature_dim
         self.compress_rate = compress_rate
-        self.trans = LocalTrans.builder(feature_dim, local_window_size=window_size, depth=depth, **kwargs)
+        self.trans = LocalTrans.builder(feature_dim, local_window_size=window_size, depth=depth, causal=causal, **kwargs)
         self.down_layer = CausalConv1d(feature_dim, feature_dim, kernel_size=compress_rate, stride=compress_rate) if causal \
             else Conv1d(feature_dim, feature_dim, kernel_size=compress_rate, stride=compress_rate)
 
@@ -157,7 +157,7 @@ class CompressedLocalEncoderWithCache(nn.Module):
                                     compress_rate=compress_rate, depth=first_layer_depth, causal=causal, **kwargs)
 
         self.local_trans = LocalTrans.builder(
-            feature_dim, local_window_size=self.trans_window_size, depth=depth - first_layer_depth, **kwargs)
+            feature_dim, local_window_size=self.trans_window_size, depth=depth - first_layer_depth, causal=causal, **kwargs)
 
     def forward(self, feature):
         feature = feature.permute(0, 2, 1)
@@ -178,7 +178,7 @@ class CompressedLocalDecoderWithCache(nn.Module):
                                   compress_rate=self.compress_rate, depth=2, causal=causal, **kwargs)
 
         self.local_trans = LocalTrans.builder(
-            feature_dim=feature_dim, local_window_size=self.trans_window_size, depth=depth - 2, **kwargs)
+            feature_dim=feature_dim, local_window_size=self.trans_window_size, depth=depth - 2, causal=causal, **kwargs)
 
     def forward(self, feature):
         b, t, c = feature.shape
