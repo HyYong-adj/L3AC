@@ -26,6 +26,7 @@ pip install local-attention
 
 pip install soundfile librosa
 pip install openai-whisper pesq pystoi jiwer ptflops
+```
 
 ### MERT / HuggingFace Transformers (optional but recommended for MERT-based perceptual loss)
 
