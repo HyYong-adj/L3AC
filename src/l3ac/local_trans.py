@@ -48,9 +48,16 @@ class LocalTrans(nn.Module):
         return x
 
     @classmethod
-    def builder(cls, feature_dim=128, depth=2, local_window_size=200, use_dynamic_pos_bias=False):
+    def builder(
+            cls,
+            feature_dim=128,
+            depth=2,
+            local_window_size=200,
+            use_dynamic_pos_bias=False,
+            causal=True,
+    ):
         return cls(dim=feature_dim, depth=depth, dim_head=feature_dim // 4, heads=6, ff_mult=4,
-                   causal=True, local_attn_window_size=local_window_size, use_dynamic_pos_bias=use_dynamic_pos_bias, )
+                   causal=causal, local_attn_window_size=local_window_size, use_dynamic_pos_bias=use_dynamic_pos_bias, )
 
 
 class LocalEncoder(nn.Module):
