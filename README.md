@@ -23,6 +23,7 @@ pip install pydantic-settings lz4 bidict
 pip install scipy seaborn rich
 
 pip install local-attention
+pip install descript-audiotools
 
 pip install soundfile librosa
 pip install openai-whisper pesq pystoi jiwer ptflops
