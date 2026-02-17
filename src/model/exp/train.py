@@ -188,7 +188,7 @@ def train():
     train_with_discriminator = 'network_gen_loss' in model.mc.loss_config['loss_weights']
 
     # best model tracking (maximize preferred eval metrics)
-    best_score = float('-inf')
+    best_score = None
     best_epoch = -1
     best_metric_label = None
     best_model_path = RS.output_dir / "best_model"
@@ -267,7 +267,11 @@ def train():
             current_score, mode, score_label = _select_eval_score(metric_results)
 
             if current_score is not None:
-                improved = (current_score > best_score) if mode == "max" else (current_score < best_score)
+                # First valid eval score should always initialize the best model.
+                if best_score is None:
+                    improved = True
+                else:
+                    improved = (current_score > best_score) if mode == "max" else (current_score < best_score)
                 if improved:
                     best_score = current_score
                     best_epoch = epoch
